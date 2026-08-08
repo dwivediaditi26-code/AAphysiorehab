@@ -88,8 +88,19 @@ export default function PhysioRehabApp() {
 
   function addExercise(form) {
     const id = `e${Date.now()}`;
-    setExercises([...exercises, { id, name: form.name, region: form.region, difficulty: form.difficulty, sets: Number(form.sets) || 1, reps: form.reps, rest: form.rest, tracking: form.tracking }]);
+    setExercises([
+      ...exercises,
+      {
+        id, name: form.name, region: form.region, difficulty: form.difficulty, sets: Number(form.sets) || 1,
+        reps: form.reps, rest: form.rest, frequency: form.frequency, tracking: form.tracking,
+        videoUrl: form.videoFile ? URL.createObjectURL(form.videoFile) : null,
+      },
+    ]);
     setShowAddExercise(false);
+  }
+
+  function updateExerciseVideo(id, videoUrl) {
+    setExercises((prev) => prev.map((e) => (e.id === id ? { ...e, videoUrl } : e)));
   }
 
   function sendMessage(patientId, text, from) {
@@ -172,7 +183,7 @@ export default function PhysioRehabApp() {
         )}
 
         {view === "library" && (
-          <ExerciseLibraryView exercises={exercises} onAddExercise={() => setShowAddExercise(true)} />
+          <ExerciseLibraryView exercises={exercises} onAddExercise={() => setShowAddExercise(true)} onUpdateVideo={updateExerciseVideo} />
         )}
 
         {view === "plans" && plans[planBuilderPatient.id] && (

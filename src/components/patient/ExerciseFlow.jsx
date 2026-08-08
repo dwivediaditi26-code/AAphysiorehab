@@ -41,19 +41,25 @@ export function PatientExerciseDetail({ ex, prescribed, onBack, onStart }) {
             </div>
           </div>
         )}
-        <div className="grid grid-cols-3 gap-2 mb-5">
+        <div className={`grid ${ex.frequency ? "grid-cols-2" : "grid-cols-3"} gap-2 mb-5`}>
           <div className="bg-white rounded-xl border border-gray-100 p-3 text-center">
             <p className="text-sm font-semibold text-gray-900">{prescribed ? prescribed.sets : ex.sets}</p>
             <p className="text-[11px] text-gray-400">Sets</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-100 p-3 text-center">
             <p className="text-sm font-semibold text-gray-900">{prescribed ? prescribed.reps : ex.reps}</p>
-            <p className="text-[11px] text-gray-400">Reps</p>
+            <p className="text-[11px] text-gray-400">Reps / Hold</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-100 p-3 text-center">
             <p className="text-sm font-semibold text-gray-900">{ex.rest}</p>
             <p className="text-[11px] text-gray-400">Rest</p>
           </div>
+          {ex.frequency && (
+            <div className="bg-white rounded-xl border border-gray-100 p-3 text-center">
+              <p className="text-sm font-semibold text-gray-900">{ex.frequency}</p>
+              <p className="text-[11px] text-gray-400">Frequency</p>
+            </div>
+          )}
         </div>
         <p className="text-xs font-semibold text-gray-500 mb-2">Instructions</p>
         <ul className="space-y-2.5 mb-2">

@@ -1,15 +1,17 @@
 import React, { useState } from "react";
-import { Search, Filter, Dumbbell, Video, Plus } from "lucide-react";
+import { Search, Filter, Dumbbell, Video, Plus, Upload, Play, X as XIcon } from "lucide-react";
 import { Pill, PageHeader, Button } from "../ui/Atoms.jsx";
 import { Modal, Field, inputClass } from "../ui/Modal.jsx";
 import { REGIONS } from "../../data/seed.js";
 
-export function ExerciseLibraryView({ exercises, onAddExercise }) {
+export function ExerciseLibraryView({ exercises, onAddExercise, onUpdateVideo }) {
   const [query, setQuery] = useState("");
   const [region, setRegion] = useState("All");
+  const [videoTargetId, setVideoTargetId] = useState(null);
   const filtered = exercises.filter(
     (e) => (region === "All" || e.region === region) && e.name.toLowerCase().includes(query.toLowerCase())
   );
+  const videoTarget = exercises.find((e) => e.id === videoTargetId);
 
   return (
     <div>
@@ -47,27 +49,98 @@ export function ExerciseLibraryView({ exercises, onAddExercise }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map((ex) => (
           <div key={ex.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-            <div className="w-full h-24 rounded-xl bg-violet-50 flex items-center justify-center text-violet-300 mb-3">
-              <Dumbbell size={26} />
-            </div>
+            {ex.videoUrl ? (
+              <video src={ex.videoUrl} className="w-full h-24 rounded-xl bg-black object-cover mb-3" muted />
+            ) : (
+              <div className="w-full h-24 rounded-xl bg-violet-50 flex items-center justify-center text-violet-300 mb-3">
+                <Dumbbell size={26} />
+              </div>
+            )}
             <p className="text-sm font-semibold text-gray-900">{ex.name}</p>
             <p className="text-xs text-gray-400 mb-2">{ex.region} · {ex.difficulty}</p>
-            <p className="text-xs text-gray-500 mb-3">{ex.sets} sets × {ex.reps} · rest {ex.rest}</p>
-            {ex.tracking ? (
-              <Pill tone="violet"><span className="inline-flex items-center gap-1"><Video size={11} /> Live Tracking</span></Pill>
-            ) : (
-              <Pill tone="gray">Video only</Pill>
-            )}
+            <p className="text-xs text-gray-500 mb-1">{ex.sets} sets × {ex.reps} · rest {ex.rest}</p>
+            {ex.frequency && <p className="text-xs text-gray-400 mb-3">{ex.frequency}</p>}
+            <div className="flex items-center gap-2 flex-wrap mt-2">
+              {ex.tracking ? (
+                <Pill tone="violet"><span className="inline-flex items-center gap-1"><Video size={11} /> Live Tracking</span></Pill>
+              ) : (
+                <Pill tone="gray">Video only</Pill>
+              )}
+              {ex.videoUrl ? (
+                <Pill tone="emerald">Video added</Pill>
+              ) : (
+                <button
+                  onClick={() => setVideoTargetId(ex.id)}
+                  className="text-xs font-medium text-violet-600 px-2 py-1 rounded-full bg-violet-50 hover:bg-violet-100 inline-flex items-center gap-1"
+                >
+                  <Upload size={11} /> Add video
+                </button>
+              )}
+            </div>
           </div>
         ))}
         {filtered.length === 0 && <p className="text-sm text-gray-400 col-span-full text-center py-10">No exercises match your filters</p>}
       </div>
+
+      {videoTarget && (
+        <AddVideoModal
+          ex={videoTarget}
+          onClose={() => setVideoTargetId(null)}
+          onSave={(url) => { onUpdateVideo(videoTarget.id, url); setVideoTargetId(null); }}
+        />
+      )}
     </div>
   );
 }
 
+function VideoUploadField({ file, onChange }) {
+  return (
+    <Field label="Demonstration video (optional)">
+      {file ? (
+        <div className="relative">
+          <video src={URL.createObjectURL(file)} controls className="w-full h-36 rounded-xl bg-black object-cover" />
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center"
+          >
+            <XIcon size={14} />
+          </button>
+        </div>
+      ) : (
+        <label className="flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-gray-200 rounded-xl py-6 cursor-pointer hover:border-violet-300 hover:bg-violet-50">
+          <Upload size={18} className="text-gray-400" />
+          <span className="text-xs text-gray-500">Tap to upload a video</span>
+          <input
+            type="file"
+            accept="video/*"
+            className="hidden"
+            onChange={(e) => onChange(e.target.files && e.target.files[0])}
+          />
+        </label>
+      )}
+      <p className="text-[11px] text-gray-400 mt-1.5">
+        Preview only for now — persists until you reload this page. Real storage needs Supabase Storage wired up.
+      </p>
+    </Field>
+  );
+}
+
+function AddVideoModal({ ex, onClose, onSave }) {
+  const [file, setFile] = useState(null);
+  return (
+    <Modal title={`Add video · ${ex.name}`} onClose={onClose}>
+      <VideoUploadField file={file} onChange={setFile} />
+      <div className="flex justify-end gap-2 mt-4">
+        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button onClick={() => { if (file) onSave(URL.createObjectURL(file)); }}>Save</Button>
+      </div>
+    </Modal>
+  );
+}
+
 export function AddExerciseModal({ onClose, onAdd }) {
-  const [form, setForm] = useState({ name: "", region: "Core", difficulty: "Beginner", sets: 3, reps: "10", rest: "30 sec", tracking: false });
+  const [form, setForm] = useState({ name: "", region: "Core", difficulty: "Beginner", sets: 3, reps: "10", rest: "30 sec", frequency: "Daily", tracking: false, videoFile: null });
   return (
     <Modal title="Add Exercise" onClose={onClose}>
       <Field label="Exercise name">
@@ -89,14 +162,20 @@ export function AddExerciseModal({ onClose, onAdd }) {
         <Field label="Sets">
           <input type="number" className={inputClass} value={form.sets} onChange={(e) => setForm({ ...form, sets: e.target.value })} />
         </Field>
-        <Field label="Reps">
-          <input className={inputClass} value={form.reps} onChange={(e) => setForm({ ...form, reps: e.target.value })} />
+        <Field label="Reps / Hold">
+          <input className={inputClass} value={form.reps} onChange={(e) => setForm({ ...form, reps: e.target.value })} placeholder="10 or 20 sec hold" />
         </Field>
         <Field label="Rest">
           <input className={inputClass} value={form.rest} onChange={(e) => setForm({ ...form, rest: e.target.value })} />
         </Field>
       </div>
-      <label className="flex items-center gap-2 mt-1 mb-2">
+      <Field label="Frequency">
+        <select className={inputClass} value={form.frequency} onChange={(e) => setForm({ ...form, frequency: e.target.value })}>
+          <option>Daily</option><option>2x/day</option><option>3x/week</option><option>5x/week</option><option>Alternate days</option>
+        </select>
+      </Field>
+      <VideoUploadField file={form.videoFile} onChange={(f) => setForm({ ...form, videoFile: f })} />
+      <label className="flex items-center gap-2 mt-3 mb-2">
         <input type="checkbox" checked={form.tracking} onChange={(e) => setForm({ ...form, tracking: e.target.checked })} />
         <span className="text-sm text-gray-600">Supports live camera tracking</span>
       </label>
