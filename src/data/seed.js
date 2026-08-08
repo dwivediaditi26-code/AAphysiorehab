@@ -17,6 +17,7 @@ export const EXERCISES_SEED = [
   { id: "e14", name: "Shoulder Abduction", region: "Shoulder", difficulty: "Beginner", sets: 3, reps: "12", rest: "30 sec", tracking: true },
   { id: "e15", name: "Sit-to-Stand", region: "Lower Limb", difficulty: "Intermediate", sets: 3, reps: "10", rest: "45 sec", tracking: true },
   { id: "e16", name: "Heel Raises", region: "Lower Limb", difficulty: "Beginner", sets: 3, reps: "15", rest: "30 sec", tracking: true },
+  { id: "e17", name: "Single Leg Bridge", region: "Lumbar / Core", difficulty: "Intermediate", sets: 2, reps: "8 each side", rest: "30 sec", tracking: true },
 ];
 
 export const CONDITION_EXERCISE_MAP = {
@@ -99,6 +100,7 @@ export const INSTRUCTIONS_MAP = {
   e13: ["Stand tall, arm relaxed at your side", "Raise arm forward to shoulder height, elbow straight", "Keep movement slow and controlled", "Lower back down with control"],
   e14: ["Stand tall, arm relaxed at your side", "Raise arm out to the side to shoulder height", "Keep shoulder relaxed, avoid shrugging", "Lower back down with control"],
   e15: ["Sit near the edge of a sturdy chair", "Lean slightly forward and stand up fully", "Keep knees aligned with toes", "Sit back down with control"],
+  e17: ["Lie on your back, one knee bent with foot flat", "Extend the other leg straight, lifted off the floor", "Push through the planted heel to lift your hips", "Keep the lifted leg extended throughout", "Lower with control and repeat"],
 };
 export const DEFAULT_INSTRUCTIONS = ["Move slowly and with control", "Keep breathing throughout the movement", "Return to the starting position between reps", "Stop and rest if you feel sharp pain"];
 export function getInstructions(exerciseId) {

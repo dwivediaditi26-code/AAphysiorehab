@@ -1,15 +1,19 @@
 import React, { useEffect, useRef, useState } from "react";
 import { X, Pause, Play, AlertTriangle } from "lucide-react";
-import { createDeadBugTracker } from "../../lib/deadBugTracker.js";
 import { parseRepsTarget } from "../../lib/helpers.js";
 
 /**
- * Real camera + MediaPipe Pose Landmarker version of the Dead Bug live-tracking screen.
- * Renders inside the exercise flow for any exercise listed in TRACKED_EXERCISE_COMPONENTS — same props:
- *   ex          — exercise record (needs ex.id, ex.name, ex.sets, ex.reps)
- *   prescribed  — { sets, reps } as prescribed to this patient for today, or null
- *   onClose     — called when the patient backs out without finishing
- *   onFinish    — called with { sets, duration, reps, formFeedback } when done
+ * Real camera + MediaPipe Pose Landmarker exercise-tracking screen. Generic —
+ * takes a `trackerFactory` (e.g. createDeadBugTracker, createGluteBridgeTracker)
+ * so the same camera/overlay/UI plumbing is shared across every tracked exercise.
+ * See TRACKED_EXERCISE_COMPONENTS in ExerciseFlow.jsx for the exercise -> tracker map.
+ *
+ * Props:
+ *   ex             — exercise record (needs ex.id, ex.name, ex.sets, ex.reps)
+ *   prescribed     — { sets, reps } as prescribed to this patient for today, or null
+ *   trackerFactory — function returning a tracker (processFrame/getRepCount/getFeedback/reset)
+ *   onClose        — called when the patient backs out without finishing
+ *   onFinish       — called with { sets, duration, reps, formFeedback } when done
  *
  * Requires: npm install @mediapipe/tasks-vision
  * Requires HTTPS (or localhost) — getUserMedia is blocked on plain HTTP.
@@ -51,11 +55,11 @@ const CONNECTIONS = [
   [23, 25], [25, 27], [24, 26], [26, 28],
 ];
 
-export default function DeadBugCameraSession({ ex, prescribed, onClose, onFinish }) {
+export default function TrackedExerciseSession({ ex, prescribed, trackerFactory, onClose, onFinish }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
-  const trackerRef = useRef(createDeadBugTracker());
+  const trackerRef = useRef(trackerFactory());
   const rafRef = useRef(null);
   const startRef = useRef(null);
 

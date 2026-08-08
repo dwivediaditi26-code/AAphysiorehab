@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recha
 import { Pill, CircularStat } from "../ui/Atoms.jsx";
 import { initials } from "../../lib/helpers.js";
 import { PatientExerciseDetail, PatientExerciseSession, PatientSessionComplete, TRACKED_EXERCISE_COMPONENTS } from "./ExerciseFlow.jsx";
+import TrackedExerciseSession from "./TrackedExerciseSession.jsx";
 
 function PatientHome({ patient, day, todaysExercises, exercisesById, completedToday, onOpenExercise }) {
   const doneCount = todaysExercises.filter((pe) => completedToday[pe.exerciseId]).length;
@@ -224,9 +225,9 @@ export default function PatientApp({ patient, weeks, exercisesById, therapistNam
     const prescribed = todaysExercises.find((pe) => pe.exerciseId === flow.exerciseId);
     if (flow.stage === "detail") flowScreen = <PatientExerciseDetail ex={ex} prescribed={prescribed} onBack={() => setFlow(null)} onStart={() => setFlow({ stage: "session", exerciseId: flow.exerciseId })} />;
     if (flow.stage === "session") {
-      const TrackedSession = TRACKED_EXERCISE_COMPONENTS[ex.id];
-      flowScreen = TrackedSession
-        ? <TrackedSession ex={ex} prescribed={prescribed} onClose={() => setFlow(null)} onFinish={(result) => finishSession(flow.exerciseId, result)} />
+      const trackerFactory = TRACKED_EXERCISE_COMPONENTS[ex.id];
+      flowScreen = trackerFactory
+        ? <TrackedExerciseSession ex={ex} prescribed={prescribed} trackerFactory={trackerFactory} onClose={() => setFlow(null)} onFinish={(result) => finishSession(flow.exerciseId, result)} />
         : <PatientExerciseSession ex={ex} prescribed={prescribed} onClose={() => setFlow(null)} onFinish={(result) => finishSession(flow.exerciseId, result)} />;
     }
     if (flow.stage === "complete") flowScreen = <PatientSessionComplete ex={ex} result={flow.result} onContinue={() => setFlow(null)} />;

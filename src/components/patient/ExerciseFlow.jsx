@@ -2,11 +2,21 @@ import React, { useState, useEffect } from "react";
 import { ArrowLeft, Video, Play, X, RotateCcw, Check } from "lucide-react";
 import { Pill } from "../ui/Atoms.jsx";
 import { getInstructions } from "../../data/seed.js";
-import DeadBugCameraSession from "./DeadBugCameraSession.jsx";
+import { createDeadBugTracker } from "../../lib/deadBugTracker.js";
+import { createGluteBridgeTracker } from "../../lib/gluteBridgeTracker.js";
+import { createSingleLegBridgeTracker } from "../../lib/singleLegBridgeTracker.js";
+import { createBirdDogTracker } from "../../lib/birdDogTracker.js";
 
-// Exercises with a working camera tracker so far — add more as they're built,
-// following deadBugTracker.js as the template (see README).
-export const TRACKED_EXERCISE_COMPONENTS = { e4: DeadBugCameraSession };
+// Exercises with a working camera tracker so far, mapped to the factory that
+// builds their engine. Add more by writing a new tracker (see deadBugTracker.js
+// as the template) and adding it here — the camera/UI plumbing is shared via
+// TrackedExerciseSession.jsx, no new screen needed per exercise.
+export const TRACKED_EXERCISE_COMPONENTS = {
+  e4: createDeadBugTracker,     // Dead Bug
+  e3: createGluteBridgeTracker, // Glute Bridge
+  e5: createBirdDogTracker,     // Bird Dog
+  e17: createSingleLegBridgeTracker, // Single Leg Bridge
+};
 
 export function PatientExerciseDetail({ ex, prescribed, onBack, onStart }) {
   return (
@@ -17,11 +27,20 @@ export function PatientExerciseDetail({ ex, prescribed, onBack, onStart }) {
         {TRACKED_EXERCISE_COMPONENTS[ex.id] && <Pill tone="violet"><span className="inline-flex items-center gap-1"><Video size={11} /> Live Tracking</span></Pill>}
       </div>
       <div className="p-5 flex-1 overflow-y-auto">
-        <div className="w-full h-40 rounded-2xl bg-violet-50 flex items-center justify-center mb-5">
-          <div className="w-14 h-14 rounded-full bg-white shadow flex items-center justify-center text-violet-600">
-            <Play size={22} />
+        {ex.videoUrl ? (
+          <video
+            src={ex.videoUrl}
+            controls
+            playsInline
+            className="w-full h-40 rounded-2xl bg-black object-cover mb-5"
+          />
+        ) : (
+          <div className="w-full h-40 rounded-2xl bg-violet-50 flex items-center justify-center mb-5">
+            <div className="w-14 h-14 rounded-full bg-white shadow flex items-center justify-center text-violet-600">
+              <Play size={22} />
+            </div>
           </div>
-        </div>
+        )}
         <div className="grid grid-cols-3 gap-2 mb-5">
           <div className="bg-white rounded-xl border border-gray-100 p-3 text-center">
             <p className="text-sm font-semibold text-gray-900">{prescribed ? prescribed.sets : ex.sets}</p>
