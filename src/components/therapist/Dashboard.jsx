@@ -1,5 +1,5 @@
 import React from "react";
-import { Bell, Users, ClipboardList, TrendingUp, CheckCircle2, XCircle } from "lucide-react";
+import { Bell, Plus, Users, ClipboardList, TrendingUp, CheckCircle2, XCircle } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { StatCard, CircularStat, PageHeader, Button, ScopeToggle } from "../ui/Atoms.jsx";
 import { initials, adherenceTone } from "../../lib/helpers.js";
