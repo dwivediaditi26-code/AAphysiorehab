@@ -2,21 +2,9 @@ import React, { useState, useEffect } from "react";
 import { ArrowLeft, Video, Play, X, RotateCcw, Check } from "lucide-react";
 import { Pill } from "../ui/Atoms.jsx";
 import { getInstructions } from "../../data/seed.js";
-import { createDeadBugTracker } from "../../lib/deadBugTracker.js";
-import { createGluteBridgeTracker } from "../../lib/gluteBridgeTracker.js";
-import { createSingleLegBridgeTracker } from "../../lib/singleLegBridgeTracker.js";
-import { createBirdDogTracker } from "../../lib/birdDogTracker.js";
+import { TRACKED_EXERCISE_COMPONENTS } from "../../lib/trackedExercises.js";
 
-// Exercises with a working camera tracker so far, mapped to the factory that
-// builds their engine. Add more by writing a new tracker (see deadBugTracker.js
-// as the template) and adding it here — the camera/UI plumbing is shared via
-// TrackedExerciseSession.jsx, no new screen needed per exercise.
-export const TRACKED_EXERCISE_COMPONENTS = {
-  e4: createDeadBugTracker,     // Dead Bug
-  e3: createGluteBridgeTracker, // Glute Bridge
-  e5: createBirdDogTracker,     // Bird Dog
-  e17: createSingleLegBridgeTracker, // Single Leg Bridge
-};
+export { TRACKED_EXERCISE_COMPONENTS };
 
 export function PatientExerciseDetail({ ex, prescribed, onBack, onStart }) {
   return (

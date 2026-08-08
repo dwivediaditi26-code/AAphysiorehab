@@ -3,6 +3,7 @@ import { Search, Filter, Dumbbell, Video, Plus, Upload, Play, X as XIcon } from 
 import { Pill, PageHeader, Button } from "../ui/Atoms.jsx";
 import { Modal, Field, inputClass } from "../ui/Modal.jsx";
 import { REGIONS } from "../../data/seed.js";
+import { TRACKED_EXERCISE_COMPONENTS } from "../../lib/trackedExercises.js";
 
 export function ExerciseLibraryView({ exercises, onAddExercise, onUpdateVideo }) {
   const [query, setQuery] = useState("");
@@ -61,8 +62,10 @@ export function ExerciseLibraryView({ exercises, onAddExercise, onUpdateVideo })
             <p className="text-xs text-gray-500 mb-1">{ex.sets} sets × {ex.reps} · rest {ex.rest}</p>
             {ex.frequency && <p className="text-xs text-gray-400 mb-3">{ex.frequency}</p>}
             <div className="flex items-center gap-2 flex-wrap mt-2">
-              {ex.tracking ? (
+              {TRACKED_EXERCISE_COMPONENTS[ex.id] ? (
                 <Pill tone="violet"><span className="inline-flex items-center gap-1"><Video size={11} /> Live Tracking</span></Pill>
+              ) : ex.tracking ? (
+                <Pill tone="amber">Trackable — no engine yet</Pill>
               ) : (
                 <Pill tone="gray">Video only</Pill>
               )}
@@ -175,9 +178,12 @@ export function AddExerciseModal({ onClose, onAdd }) {
         </select>
       </Field>
       <VideoUploadField file={form.videoFile} onChange={(f) => setForm({ ...form, videoFile: f })} />
-      <label className="flex items-center gap-2 mt-3 mb-2">
-        <input type="checkbox" checked={form.tracking} onChange={(e) => setForm({ ...form, tracking: e.target.checked })} />
-        <span className="text-sm text-gray-600">Supports live camera tracking</span>
+      <label className="flex items-start gap-2 mt-3 mb-2">
+        <input type="checkbox" checked={form.tracking} onChange={(e) => setForm({ ...form, tracking: e.target.checked })} className="mt-0.5" />
+        <span className="text-sm text-gray-600">
+          Suitable for live camera tracking
+          <span className="block text-xs text-gray-400">Flags it for a future tracker — doesn't build one. A tracker has to be written per exercise (see README).</span>
+        </span>
       </label>
       <div className="flex justify-end gap-2 mt-4">
         <Button variant="ghost" onClick={onClose}>Cancel</Button>
