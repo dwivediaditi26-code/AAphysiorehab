@@ -53,4 +53,32 @@ export const FEEDBACK_MESSAGES = {
     en: "Stand side-on to the camera. Prop your phone so your head, hands, and feet are all in frame.",
     hi: "कैमरे के सामने बग़ल में खड़े हों। फ़ोन को इस तरह रखें कि सिर, हाथ और पैर — सभी फ्रेम में दिखें।",
   },
+  goodSquat: {
+    en: "Good depth, controlled tempo",
+    hi: "अच्छी गहराई, गति नियंत्रित रही",
+  },
+  chestUp: {
+    en: "Keep your chest up as you squat",
+    hi: "स्क्वाट करते समय छाती ऊपर रखें",
+  },
+  goodHipHinge: {
+    en: "Good hinge, back stayed straight",
+    hi: "अच्छा हिंज, पीठ सीधी रही",
+  },
+  kneesSoft: {
+    en: "Keep knees soft — this is a hip hinge, not a squat",
+    hi: "घुटनों को हल्का मोड़े रखें — यह स्क्वाट नहीं, हिप हिंज है",
+  },
+  goodStand: {
+    en: "Stood up fully, controlled tempo",
+    hi: "पूरी तरह खड़े हुए, गति नियंत्रित रही",
+  },
+  goodHeelRaise: {
+    en: "Good height, controlled tempo",
+    hi: "अच्छी ऊंचाई, गति नियंत्रित रही",
+  },
+  goodShoulderFlexion: {
+    en: "Good range, controlled tempo",
+    hi: "अच्छी रेंज, गति नियंत्रित रही",
+  },
 };
