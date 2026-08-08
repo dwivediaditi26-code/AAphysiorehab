@@ -91,18 +91,75 @@ export const KPI = { totalPatients: 24, plansInProgress: 18, sessionsCompleted: 
 export const SESSION_LABELS = ["Today", "Yesterday", "2 days ago", "3 days ago", "4 days ago", "5 days ago"];
 
 export const INSTRUCTIONS_MAP = {
-  e2: ["Lie on your back, knees bent, feet flat", "Gently flatten your lower back into the floor", "Hold briefly, then release with control", "Keep breathing throughout"],
-  e3: ["Lie on your back, knees bent, feet hip-width apart", "Squeeze glutes and lift hips toward the ceiling", "Keep ribs down, avoid arching the back", "Lower slowly to the start position"],
-  e4: ["Lie on your back with arms pointing up", "Bring knees to 90 degrees", "Slowly lower opposite arm and leg", "Keep your lower back controlled", "Return to start and repeat"],
-  e5: ["Start on hands and knees, spine neutral", "Extend opposite arm and leg together", "Keep hips level, avoid rotating the trunk", "Return with control, switch sides"],
-  e6: ["Lie on your side, elbow under shoulder", "Lift hips to form a straight line", "Keep core braced, avoid sagging", "Hold, then lower with control"],
-  e9: ["Stand with feet shoulder-width apart", "Bend knees and hips as if sitting back", "Keep chest up and knees tracking over toes", "Push through heels to stand"],
-  e13: ["Stand tall, arm relaxed at your side", "Raise arm forward to shoulder height, elbow straight", "Keep movement slow and controlled", "Lower back down with control"],
-  e14: ["Stand tall, arm relaxed at your side", "Raise arm out to the side to shoulder height", "Keep shoulder relaxed, avoid shrugging", "Lower back down with control"],
-  e15: ["Sit near the edge of a sturdy chair", "Lean slightly forward and stand up fully", "Keep knees aligned with toes", "Sit back down with control"],
-  e17: ["Lie on your back, one knee bent with foot flat", "Extend the other leg straight, lifted off the floor", "Push through the planted heel to lift your hips", "Keep the lifted leg extended throughout", "Lower with control and repeat"],
+  e2: [
+    { en: "Lie on your back, knees bent, feet flat", hi: "पीठ के बल लेटें, घुटने मुड़े हों, पैर ज़मीन पर सपाट हों" },
+    { en: "Gently flatten your lower back into the floor", hi: "अपनी कमर को धीरे से ज़मीन की ओर दबाएं" },
+    { en: "Hold briefly, then release with control", hi: "थोड़ी देर रोकें, फिर नियंत्रण से छोड़ें" },
+    { en: "Keep breathing throughout", hi: "सांस लेते रहें" },
+  ],
+  e3: [
+    { en: "Lie on your back, knees bent, feet hip-width apart", hi: "पीठ के बल लेटें, घुटने मुड़े हों, पैर कूल्हों जितनी दूरी पर हों" },
+    { en: "Squeeze glutes and lift hips toward the ceiling", hi: "ग्लूट्स को कसें और कूल्हों को ऊपर की ओर उठाएं" },
+    { en: "Keep ribs down, avoid arching the back", hi: "पसलियों को नीचे रखें, कमर को न मोड़ें" },
+    { en: "Lower slowly to the start position", hi: "धीरे-धीरे शुरुआती स्थिति में वापस आएं" },
+  ],
+  e4: [
+    { en: "Lie on your back with arms pointing up", hi: "पीठ के बल लेटें, दोनों हाथ ऊपर की ओर सीधे रखें" },
+    { en: "Bring knees to 90 degrees", hi: "घुटनों को 90 डिग्री पर लाएं" },
+    { en: "Slowly lower opposite arm and leg", hi: "विपरीत हाथ और पैर को धीरे-धीरे नीचे लाएं" },
+    { en: "Keep your lower back controlled", hi: "कमर को स्थिर और नियंत्रित रखें" },
+    { en: "Return to start and repeat", hi: "शुरुआती स्थिति में वापस आएं और दोहराएं" },
+  ],
+  e5: [
+    { en: "Start on hands and knees, spine neutral", hi: "हाथों और घुटनों के बल शुरू करें, रीढ़ सीधी रखें" },
+    { en: "Extend opposite arm and leg together", hi: "विपरीत हाथ और पैर को एक साथ सीधा करें" },
+    { en: "Keep hips level, avoid rotating the trunk", hi: "कूल्हों को समतल रखें, धड़ को न मोड़ें" },
+    { en: "Return with control, switch sides", hi: "नियंत्रण से वापस आएं, दूसरी तरफ दोहराएं" },
+  ],
+  e6: [
+    { en: "Lie on your side, elbow under shoulder", hi: "करवट लेकर लेटें, कोहनी कंधे के नीचे रखें" },
+    { en: "Lift hips to form a straight line", hi: "कूल्हों को उठाकर सीधी रेखा बनाएं" },
+    { en: "Keep core braced, avoid sagging", hi: "कोर को कसा रखें, कमर को झुकने न दें" },
+    { en: "Hold, then lower with control", hi: "रोकें, फिर नियंत्रण से नीचे आएं" },
+  ],
+  e9: [
+    { en: "Stand with feet shoulder-width apart", hi: "पैरों को कंधों जितना चौड़ा रखकर खड़े हों" },
+    { en: "Bend knees and hips as if sitting back", hi: "ऐसे बैठें जैसे कुर्सी पर बैठ रहे हों, घुटने और कूल्हे मोड़ें" },
+    { en: "Keep chest up and knees tracking over toes", hi: "छाती ऊपर रखें, घुटने पंजों की सीध में रहें" },
+    { en: "Push through heels to stand", hi: "एड़ियों से ज़ोर लगाकर खड़े हों" },
+  ],
+  e13: [
+    { en: "Stand tall, arm relaxed at your side", hi: "सीधे खड़े हों, हाथ बगल में ढीला रखें" },
+    { en: "Raise arm forward to shoulder height, elbow straight", hi: "हाथ को आगे कंधे की ऊंचाई तक उठाएं, कोहनी सीधी रखें" },
+    { en: "Keep movement slow and controlled", hi: "गति धीमी और नियंत्रित रखें" },
+    { en: "Lower back down with control", hi: "नियंत्रण से हाथ नीचे लाएं" },
+  ],
+  e14: [
+    { en: "Stand tall, arm relaxed at your side", hi: "सीधे खड़े हों, हाथ बगल में ढीला रखें" },
+    { en: "Raise arm out to the side to shoulder height", hi: "हाथ को बगल में कंधे की ऊंचाई तक उठाएं" },
+    { en: "Keep shoulder relaxed, avoid shrugging", hi: "कंधे को ढीला रखें, ऊपर न उचकाएं" },
+    { en: "Lower back down with control", hi: "नियंत्रण से हाथ नीचे लाएं" },
+  ],
+  e15: [
+    { en: "Sit near the edge of a sturdy chair", hi: "किसी मज़बूत कुर्सी के किनारे पर बैठें" },
+    { en: "Lean slightly forward and stand up fully", hi: "थोड़ा आगे झुकें और पूरी तरह खड़े हो जाएं" },
+    { en: "Keep knees aligned with toes", hi: "घुटनों को पंजों की सीध में रखें" },
+    { en: "Sit back down with control", hi: "नियंत्रण से वापस बैठ जाएं" },
+  ],
+  e17: [
+    { en: "Lie on your back, one knee bent with foot flat", hi: "पीठ के बल लेटें, एक घुटना मोड़ें और पैर ज़मीन पर सपाट रखें" },
+    { en: "Extend the other leg straight, lifted off the floor", hi: "दूसरे पैर को सीधा रखें और ज़मीन से ऊपर उठाएं" },
+    { en: "Push through the planted heel to lift your hips", hi: "ज़मीन पर टिकी एड़ी से ज़ोर लगाकर कूल्हे उठाएं" },
+    { en: "Keep the lifted leg extended throughout", hi: "उठाए हुए पैर को पूरी तरह सीधा रखें" },
+    { en: "Lower with control and repeat", hi: "नियंत्रण से नीचे आएं और दोहराएं" },
+  ],
 };
-export const DEFAULT_INSTRUCTIONS = ["Move slowly and with control", "Keep breathing throughout the movement", "Return to the starting position between reps", "Stop and rest if you feel sharp pain"];
+export const DEFAULT_INSTRUCTIONS = [
+  { en: "Move slowly and with control", hi: "धीरे और नियंत्रित तरीके से करें" },
+  { en: "Keep breathing throughout the movement", hi: "पूरी कसरत के दौरान सांस लेते रहें" },
+  { en: "Return to the starting position between reps", hi: "हर बार शुरुआती स्थिति में वापस आएं" },
+  { en: "Stop and rest if you feel sharp pain", hi: "अगर तेज़ दर्द महसूस हो तो रुक जाएं और आराम करें" },
+];
 export function getInstructions(exerciseId) {
   return INSTRUCTIONS_MAP[exerciseId] || DEFAULT_INSTRUCTIONS;
 }

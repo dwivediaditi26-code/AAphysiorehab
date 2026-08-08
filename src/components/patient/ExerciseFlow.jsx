@@ -56,11 +56,14 @@ export function PatientExerciseDetail({ ex, prescribed, onBack, onStart }) {
           </div>
         </div>
         <p className="text-xs font-semibold text-gray-500 mb-2">Instructions</p>
-        <ul className="space-y-2 mb-2">
+        <ul className="space-y-2.5 mb-2">
           {getInstructions(ex.id).map((line, i) => (
-            <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
+            <li key={i} className="flex items-start gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-violet-400 mt-1.5 shrink-0" />
-              {line}
+              <span>
+                <span className="text-sm text-gray-600 block">{line.en}</span>
+                <span className="text-sm text-gray-400 block" lang="hi">{line.hi}</span>
+              </span>
             </li>
           ))}
         </ul>
@@ -165,11 +168,14 @@ export function PatientSessionComplete({ ex, result, onContinue }) {
       {result.formFeedback ? (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 w-full max-w-xs mb-6 text-left">
           <p className="text-xs font-semibold text-gray-500 mb-2">Form feedback</p>
-          <ul className="space-y-1.5">
+          <ul className="space-y-2">
             {result.formFeedback.map((line, i) => (
-              <li key={i} className="text-xs text-gray-600 flex items-start gap-2">
+              <li key={i} className="flex items-start gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-violet-400 mt-1 shrink-0" />
-                {line}
+                <span>
+                  <span className="text-xs text-gray-600 block">{line.en}</span>
+                  <span className="text-xs text-gray-400 block" lang="hi">{line.hi}</span>
+                </span>
               </li>
             ))}
           </ul>

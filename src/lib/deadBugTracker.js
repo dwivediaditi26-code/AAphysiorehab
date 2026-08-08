@@ -17,6 +17,7 @@
  *
  * BlazePose landmark indices used: 11/12 shoulders, 15/16 wrists, 23/24 hips, 27/28 ankles.
  */
+import { FEEDBACK_MESSAGES as M } from "./feedbackMessages.js";
 
 export function createDeadBugTracker(config = {}) {
   const ENTER = config.enter ?? 0.32;
@@ -103,10 +104,10 @@ export function createDeadBugTracker(config = {}) {
     getExtension() { return { A: state.lastExt.A, B: state.lastExt.B }; },
     getFeedback() {
       const out = [];
-      if (state.feedbackFlags.has("speed")) out.push("Move a little slower through each rep");
-      if (state.feedbackFlags.has("trunk")) out.push("Keep your lower back gently pressed to the floor");
-      if (state.feedbackFlags.has("isolation")) out.push("Try to keep the resting arm and leg still");
-      if (out.length === 0) out.push("Controlled movement, good form throughout");
+      if (state.feedbackFlags.has("speed")) out.push(M.slowerReps);
+      if (state.feedbackFlags.has("trunk")) out.push(M.lowerBackDown);
+      if (state.feedbackFlags.has("isolation")) out.push(M.keepRestingStill);
+      if (out.length === 0) out.push(M.goodFormGeneric);
       return out;
     },
     reset() {

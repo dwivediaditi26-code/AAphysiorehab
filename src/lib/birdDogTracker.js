@@ -13,6 +13,7 @@
  * footage. Coaching feedback, not a diagnostic tool.
  */
 import { norm, dist } from "./trackingMath.js";
+import { FEEDBACK_MESSAGES as M } from "./feedbackMessages.js";
 
 export function createBirdDogTracker(config = {}) {
   const ENTER = config.enter ?? 0.35;
@@ -91,10 +92,10 @@ export function createBirdDogTracker(config = {}) {
     getExtension() { return { A: state.lastExt.A, B: state.lastExt.B }; },
     getFeedback() {
       const out = [];
-      if (state.feedbackFlags.has("speed")) out.push("Move a little slower through each rep");
-      if (state.feedbackFlags.has("trunk")) out.push("Keep your hips level, avoid rocking side to side");
-      if (state.feedbackFlags.has("isolation")) out.push("Keep the resting arm and leg still");
-      if (out.length === 0) out.push("Controlled movement, good form throughout");
+      if (state.feedbackFlags.has("speed")) out.push(M.slowerReps);
+      if (state.feedbackFlags.has("trunk")) out.push(M.noRocking);
+      if (state.feedbackFlags.has("isolation")) out.push(M.keepRestingStill);
+      if (out.length === 0) out.push(M.goodFormGeneric);
       return out;
     },
     reset() {

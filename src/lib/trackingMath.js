@@ -24,3 +24,22 @@ export function angleAt(a, b, c) {
   const cosA = Math.min(1, Math.max(-1, dot / (magA * magC)));
   return (Math.acos(cosA) * 180) / Math.PI;
 }
+
+// Landmarks that should all be visible for a useful side-on, whole-body shot:
+// nose, shoulders, wrists, hips, knees, ankles.
+const FRAMING_LANDMARKS = [0, 11, 12, 15, 16, 23, 24, 25, 26, 27, 28];
+
+/**
+ * True when every landmark needed to see the whole body is present and
+ * reasonably confident. Use this to pause rep counting and prompt the
+ * patient to reposition rather than counting reps off a partial-body frame.
+ */
+export function isWholeBodyInFrame(landmarks, threshold = 0.5) {
+  if (!landmarks) return false;
+  return FRAMING_LANDMARKS.every((i) => {
+    const p = landmarks[i];
+    if (!p) return false;
+    const visibility = p.visibility ?? 1;
+    return visibility >= threshold;
+  });
+}

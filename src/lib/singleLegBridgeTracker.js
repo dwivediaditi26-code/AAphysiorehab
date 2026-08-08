@@ -12,6 +12,7 @@
  * footage. Coaching feedback, not a diagnostic tool.
  */
 import { norm, angleAt } from "./trackingMath.js";
+import { FEEDBACK_MESSAGES as M } from "./feedbackMessages.js";
 
 export function createSingleLegBridgeTracker(config = {}) {
   const ENTER = config.enter ?? 0.55;
@@ -78,9 +79,9 @@ export function createSingleLegBridgeTracker(config = {}) {
     getActiveLeg() { return state.activeLeg; },
     getFeedback() {
       const out = [];
-      if (state.feedbackFlags.has("bothLegsDown")) out.push("Keep the non-working leg lifted and straight");
-      if (state.feedbackFlags.has("speed")) out.push("Rise and lower a little slower");
-      if (out.length === 0) out.push("Good height, leg stayed extended");
+      if (state.feedbackFlags.has("bothLegsDown")) out.push(M.keepNonWorkingLegUp);
+      if (state.feedbackFlags.has("speed")) out.push(M.slowerRiseLower);
+      if (out.length === 0) out.push(M.goodHeightLegExtended);
       return out;
     },
     reset() {

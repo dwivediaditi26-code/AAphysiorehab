@@ -10,6 +10,7 @@
  * footage. Coaching feedback, not a diagnostic tool.
  */
 import { norm, angleAt } from "./trackingMath.js";
+import { FEEDBACK_MESSAGES as M } from "./feedbackMessages.js";
 
 export function createGluteBridgeTracker(config = {}) {
   const ENTER = config.enter ?? 0.55;
@@ -70,9 +71,9 @@ export function createGluteBridgeTracker(config = {}) {
     getExtension() { return state.lastExt; },
     getFeedback() {
       const out = [];
-      if (state.feedbackFlags.has("speed")) out.push("Rise and lower a little slower");
-      if (state.feedbackFlags.has("level")) out.push("Keep both hips level as you lift");
-      if (out.length === 0) out.push("Good bridge height, controlled tempo");
+      if (state.feedbackFlags.has("speed")) out.push(M.slowerRiseLower);
+      if (state.feedbackFlags.has("level")) out.push(M.keepHipsLevel);
+      if (out.length === 0) out.push(M.goodBridgeHeight);
       return out;
     },
     reset() {

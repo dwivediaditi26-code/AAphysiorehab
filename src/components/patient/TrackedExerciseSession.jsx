@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { X, Pause, Play, AlertTriangle } from "lucide-react";
 import { parseRepsTarget } from "../../lib/helpers.js";
+import { isWholeBodyInFrame } from "../../lib/trackingMath.js";
+import { FEEDBACK_MESSAGES as M } from "../../lib/feedbackMessages.js";
 
 /**
  * Real camera + MediaPipe Pose Landmarker exercise-tracking screen. Generic —
@@ -68,6 +70,7 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
   const [reps, setReps] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [feedback, setFeedback] = useState([]);
+  const [framingOk, setFramingOk] = useState(true);
 
   const targetReps = parseRepsTarget(prescribed ? prescribed.reps : ex.reps);
 
@@ -110,15 +113,21 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
           drawOverlay(canvas, video, landmarks);
 
           if (landmarks) {
-            trackerRef.current.processFrame(landmarks, Date.now());
-            const count = trackerRef.current.getRepCount();
-            setReps(count);
-            setFeedback(trackerRef.current.getFeedback());
-            setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
-            if (count >= targetReps) {
-              finish();
-              return;
+            const bodyVisible = isWholeBodyInFrame(landmarks);
+            setFramingOk(bodyVisible);
+            if (bodyVisible) {
+              trackerRef.current.processFrame(landmarks, Date.now());
+              const count = trackerRef.current.getRepCount();
+              setReps(count);
+              setFeedback(trackerRef.current.getFeedback());
+              setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
+              if (count >= targetReps) {
+                finish();
+                return;
+              }
             }
+          } else {
+            setFramingOk(false);
           }
         }
         rafRef.current = requestAnimationFrame(frame);
@@ -218,15 +227,29 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
         )}
 
         {status === "ready" && (
-          <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
-            <span className="bg-black/50 text-white text-xs px-3 py-1.5 rounded-full">{formatTime(elapsed)}</span>
-            <span className="bg-black/50 text-white text-xs px-3 py-1.5 rounded-full">{reps} / {targetReps} reps</span>
+          <div className="absolute top-3 left-3 right-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="bg-black/50 text-white text-xs px-3 py-1.5 rounded-full">{formatTime(elapsed)}</span>
+              <span className="bg-black/50 text-white text-xs px-3 py-1.5 rounded-full">{reps} / {targetReps} reps</span>
+            </div>
+            <div className="bg-black/40 text-white text-[11px] px-3 py-1.5 rounded-xl text-center leading-snug">
+              <span className="block">{M.cameraSetupTip.en}</span>
+              <span className="block text-gray-300" lang="hi">{M.cameraSetupTip.hi}</span>
+            </div>
           </div>
         )}
 
-        {status === "ready" && feedback.length > 0 && (
-          <div className="absolute bottom-3 left-3 right-3 bg-black/60 text-white text-xs px-3 py-2 rounded-xl">
-            {feedback[0]}
+        {status === "ready" && !framingOk && (
+          <div className="absolute bottom-3 left-3 right-3 bg-amber-600/90 text-white text-xs px-3 py-2 rounded-xl text-center">
+            <span className="block font-medium">{M.moveBackFullBody.en}</span>
+            <span className="block" lang="hi">{M.moveBackFullBody.hi}</span>
+          </div>
+        )}
+
+        {status === "ready" && framingOk && feedback.length > 0 && (
+          <div className="absolute bottom-3 left-3 right-3 bg-black/60 text-white text-xs px-3 py-2 rounded-xl text-center">
+            <span className="block">{feedback[0].en}</span>
+            <span className="block text-gray-300" lang="hi">{feedback[0].hi}</span>
           </div>
         )}
       </div>
