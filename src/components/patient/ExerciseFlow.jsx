@@ -4,6 +4,7 @@ import { Pill } from "../ui/Atoms.jsx";
 import { getInstructions } from "../../data/seed.js";
 import { TRACKED_EXERCISE_COMPONENTS, TRACKER_CAMERA_ORIENTATION } from "../../lib/trackedExercises.js";
 import { FEEDBACK_MESSAGES as M } from "../../lib/feedbackMessages.js";
+import { unlockSpeechSynthesis } from "../../lib/voiceCoach.js";
 
 export { TRACKED_EXERCISE_COMPONENTS };
 
@@ -76,7 +77,10 @@ export function PatientExerciseDetail({ ex, prescribed, onBack, onStart }) {
         </ul>
       </div>
       <div className="p-5 pt-0 shrink-0">
-        <button onClick={onStart} className="w-full bg-violet-600 text-white text-sm font-semibold py-3 rounded-xl hover:bg-violet-700">
+        <button
+          onClick={() => { unlockSpeechSynthesis(); onStart(); }}
+          className="w-full bg-violet-600 text-white text-sm font-semibold py-3 rounded-xl hover:bg-violet-700"
+        >
           Start Exercise
         </button>
       </div>

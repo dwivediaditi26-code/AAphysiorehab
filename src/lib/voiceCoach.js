@@ -17,6 +17,23 @@
 
 const COOLDOWN_MS = 3500;
 
+/**
+ * iOS Safari (and iOS Chrome/etc, same WebKit engine) blocks
+ * speechSynthesis.speak() calls that aren't triggered directly inside a tap
+ * — which every voice cue here is not, since they fire from inside the
+ * camera's animation-frame loop, several async steps removed from any tap.
+ * The standard workaround: fire one real speak() call synchronously inside
+ * an actual tap handler once, which unlocks audio for the rest of the page's
+ * lifetime. Call this from the Start Exercise button's onClick, before
+ * transitioning into the tracking screen.
+ */
+export function unlockSpeechSynthesis() {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  const utter = new SpeechSynthesisUtterance(" ");
+  utter.volume = 0;
+  window.speechSynthesis.speak(utter);
+}
+
 export function createVoiceCoach() {
   let enabled = true;
   let lastKey = null;

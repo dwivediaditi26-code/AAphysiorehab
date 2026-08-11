@@ -67,6 +67,7 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
   const rafRef = useRef(null);
   const startRef = useRef(null);
   const voiceCoachRef = useRef(createVoiceCoach());
+  const prevRepsRef = useRef(0);
   const orientation = TRACKER_CAMERA_ORIENTATION[ex.id] || "frontal";
   const setupTip = orientation === "side" ? M.cameraSetupTipSide : M.cameraSetupTipFrontal;
 
@@ -135,12 +136,23 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
               setFeedback(currentFeedback);
               setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
 
+              const repJustCompleted = count > prevRepsRef.current;
+              prevRepsRef.current = count;
+
               if (!fullyFramed) {
                 voiceCoachRef.current.speak(M.moveBackFullBody, "moveBack");
               } else {
                 const primary = currentFeedback[0];
                 if (primary && !primary.good) {
+                  // An active correction: keep saying it, rate-limited by key so it
+                  // doesn't repeat every frame but does repeat every few seconds
+                  // while the issue persists.
                   voiceCoachRef.current.speak(primary, primary.voiceEn);
+                } else if (repJustCompleted && primary) {
+                  // Good form: stay quiet mid-rep (no nagging "good" every frame),
+                  // but acknowledge each completed rep once so there's always
+                  // audible confirmation the voice coach is actually running.
+                  voiceCoachRef.current.speak(primary, `rep-${count}`);
                 }
               }
 
