@@ -50,8 +50,8 @@ export const FEEDBACK_MESSAGES = {
     hi: "पीछे हटें — सुनिश्चित करें कि आपका पूरा शरीर दिख रहा हो",
   },
   cameraSetupTip: {
-    en: "Stand side-on to the camera. Prop your phone so your head, hands, and feet are all in frame.",
-    hi: "कैमरे के सामने बग़ल में खड़े हों। फ़ोन को इस तरह रखें कि सिर, हाथ और पैर — सभी फ्रेम में दिखें।",
+    en: "Face the camera directly. Prop your phone so your head, hands, and feet are all in frame.",
+    hi: "कैमरे के सामने सीधे खड़े हों। फ़ोन को इस तरह रखें कि सिर, हाथ और पैर — सभी फ्रेम में दिखें।",
   },
   goodSquat: {
     en: "Good depth, controlled tempo",
@@ -80,5 +80,21 @@ export const FEEDBACK_MESSAGES = {
   goodShoulderFlexion: {
     en: "Good range, controlled tempo",
     hi: "अच्छी रेंज, गति नियंत्रित रही",
+  },
+  evenArms: {
+    en: "Raise both arms to the same height",
+    hi: "दोनों हाथों को समान ऊंचाई तक उठाएं",
+  },
+  goodShoulderAbduction: {
+    en: "Good height, both arms even",
+    hi: "अच्छी ऊंचाई, दोनों हाथ समान रहे",
+  },
+  keepStanceLegStill: {
+    en: "Keep the standing leg still and balanced",
+    hi: "खड़े पैर को स्थिर और संतुलित रखें",
+  },
+  goodHipAbduction: {
+    en: "Good height, controlled tempo",
+    hi: "अच्छी ऊंचाई, गति नियंत्रित रही",
   },
 };

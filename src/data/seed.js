@@ -18,6 +18,7 @@ export const EXERCISES_SEED = [
   { id: "e15", name: "Sit-to-Stand", region: "Lower Limb", difficulty: "Intermediate", sets: 3, reps: "10", rest: "45 sec", frequency: "Daily", tracking: true },
   { id: "e16", name: "Heel Raises", region: "Lower Limb", difficulty: "Beginner", sets: 3, reps: "15", rest: "30 sec", frequency: "Daily", tracking: true },
   { id: "e17", name: "Single Leg Bridge", region: "Lumbar / Core", difficulty: "Intermediate", sets: 2, reps: "8 each side", rest: "30 sec", frequency: "3x/week", tracking: true },
+  { id: "e18", name: "Standing Hip Abduction", region: "Hip", difficulty: "Beginner", sets: 3, reps: "12 each side", rest: "30 sec", frequency: "Daily", tracking: true },
 ];
 
 export const CONDITION_EXERCISE_MAP = {
@@ -152,6 +153,13 @@ export const INSTRUCTIONS_MAP = {
     { en: "Push through the planted heel to lift your hips", hi: "ज़मीन पर टिकी एड़ी से ज़ोर लगाकर कूल्हे उठाएं" },
     { en: "Keep the lifted leg extended throughout", hi: "उठाए हुए पैर को पूरी तरह सीधा रखें" },
     { en: "Lower with control and repeat", hi: "नियंत्रण से नीचे आएं और दोहराएं" },
+  ],
+  e18: [
+    { en: "Stand tall, holding onto a wall or chair for balance", hi: "सीधे खड़े हों, संतुलन के लिए दीवार या कुर्सी पकड़ें" },
+    { en: "Keep your standing leg straight and steady", hi: "खड़े पैर को सीधा और स्थिर रखें" },
+    { en: "Lift the other leg out to the side, keeping the toes forward", hi: "दूसरे पैर को बगल में उठाएं, पंजे आगे की ओर रखें" },
+    { en: "Avoid leaning your torso to compensate", hi: "शरीर को झुकाकर संतुलन न बनाएं" },
+    { en: "Lower with control and repeat", hi: "नियंत्रण से नीचे लाएं और दोहराएं" },
   ],
 };
 export const DEFAULT_INSTRUCTIONS = [
