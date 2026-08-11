@@ -49,9 +49,13 @@ export const FEEDBACK_MESSAGES = {
     en: "Move back — make sure your whole body is visible",
     hi: "पीछे हटें — सुनिश्चित करें कि आपका पूरा शरीर दिख रहा हो",
   },
-  cameraSetupTip: {
+  cameraSetupTipFrontal: {
     en: "Face the camera directly. Prop your phone so your head, hands, and feet are all in frame.",
     hi: "कैमरे के सामने सीधे खड़े हों। फ़ोन को इस तरह रखें कि सिर, हाथ और पैर — सभी फ्रेम में दिखें।",
+  },
+  cameraSetupTipSide: {
+    en: "Lie down side-on to the camera. Prop your phone so your head, hands, and feet are all in frame.",
+    hi: "कैमरे के सामने बग़ल में लेटें। फ़ोन को इस तरह रखें कि सिर, हाथ और पैर — सभी फ्रेम में दिखें।",
   },
   goodSquat: {
     en: "Good depth, controlled tempo",

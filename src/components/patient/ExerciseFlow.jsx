@@ -1,18 +1,22 @@
 import React, { useState, useEffect } from "react";
-import { ArrowLeft, Video, Play, X, RotateCcw, Check } from "lucide-react";
+import { ArrowLeft, Video, Play, X, RotateCcw, Check, Smartphone } from "lucide-react";
 import { Pill } from "../ui/Atoms.jsx";
 import { getInstructions } from "../../data/seed.js";
-import { TRACKED_EXERCISE_COMPONENTS } from "../../lib/trackedExercises.js";
+import { TRACKED_EXERCISE_COMPONENTS, TRACKER_CAMERA_ORIENTATION } from "../../lib/trackedExercises.js";
+import { FEEDBACK_MESSAGES as M } from "../../lib/feedbackMessages.js";
 
 export { TRACKED_EXERCISE_COMPONENTS };
 
 export function PatientExerciseDetail({ ex, prescribed, onBack, onStart }) {
+  const isTracked = !!TRACKED_EXERCISE_COMPONENTS[ex.id];
+  const orientation = TRACKER_CAMERA_ORIENTATION[ex.id];
+  const setupTip = orientation === "side" ? M.cameraSetupTipSide : M.cameraSetupTipFrontal;
   return (
     <div className="flex-1 flex flex-col">
       <div className="flex items-center gap-3 p-4 border-b border-gray-100 bg-white shrink-0">
         <button onClick={onBack} className="text-gray-400"><ArrowLeft size={18} /></button>
         <p className="font-semibold text-gray-900 text-sm flex-1">{ex.name}</p>
-        {TRACKED_EXERCISE_COMPONENTS[ex.id] && <Pill tone="violet"><span className="inline-flex items-center gap-1"><Video size={11} /> Live Tracking</span></Pill>}
+        {isTracked && <Pill tone="violet"><span className="inline-flex items-center gap-1"><Video size={11} /> Live Tracking</span></Pill>}
       </div>
       <div className="p-5 flex-1 overflow-y-auto">
         {ex.videoUrl ? (
@@ -26,6 +30,15 @@ export function PatientExerciseDetail({ ex, prescribed, onBack, onStart }) {
           <div className="w-full h-40 rounded-2xl bg-violet-50 flex items-center justify-center mb-5">
             <div className="w-14 h-14 rounded-full bg-white shadow flex items-center justify-center text-violet-600">
               <Play size={22} />
+            </div>
+          </div>
+        )}
+        {isTracked && (
+          <div className="flex items-start gap-2 bg-violet-50 rounded-xl p-3 mb-5">
+            <Smartphone size={15} className="text-violet-500 mt-0.5 shrink-0" />
+            <div>
+              <span className="text-xs text-gray-700 block">{setupTip.en}</span>
+              <span className="text-xs text-gray-500 block" lang="hi">{setupTip.hi}</span>
             </div>
           </div>
         )}

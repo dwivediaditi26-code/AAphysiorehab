@@ -3,6 +3,7 @@ import { X, Pause, Play, AlertTriangle } from "lucide-react";
 import { parseRepsTarget } from "../../lib/helpers.js";
 import { isWholeBodyInFrame } from "../../lib/trackingMath.js";
 import { FEEDBACK_MESSAGES as M } from "../../lib/feedbackMessages.js";
+import { TRACKER_CAMERA_ORIENTATION } from "../../lib/trackedExercises.js";
 
 /**
  * Real camera + MediaPipe Pose Landmarker exercise-tracking screen. Generic —
@@ -64,6 +65,8 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
   const trackerRef = useRef(trackerFactory());
   const rafRef = useRef(null);
   const startRef = useRef(null);
+  const orientation = TRACKER_CAMERA_ORIENTATION[ex.id] || "frontal";
+  const setupTip = orientation === "side" ? M.cameraSetupTipSide : M.cameraSetupTipFrontal;
 
   const [status, setStatus] = useState("loading"); // loading | ready | denied | error
   const [running, setRunning] = useState(true);
@@ -233,8 +236,8 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
               <span className="bg-black/50 text-white text-xs px-3 py-1.5 rounded-full">{reps} / {targetReps} reps</span>
             </div>
             <div className="bg-black/40 text-white text-[11px] px-3 py-1.5 rounded-xl text-center leading-snug">
-              <span className="block">{M.cameraSetupTip.en}</span>
-              <span className="block text-gray-300" lang="hi">{M.cameraSetupTip.hi}</span>
+              <span className="block">{setupTip.en}</span>
+              <span className="block text-gray-300" lang="hi">{setupTip.hi}</span>
             </div>
           </div>
         )}

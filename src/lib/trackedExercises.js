@@ -4,14 +4,17 @@
 // badge instead of the aspirational `ex.tracking` flag, which just means
 // "clinically suitable for tracking one day" and does NOT mean a tracker
 // exists yet).
-// Camera setup is FRONTAL (patient faces the camera) for every exercise here.
-// That flips which movements are trackable vs deadBugTracker.js's original
-// side-view assumption: sideways motion (abduction) is now reliable, forward
-// motion (flexion, hinging) is not — a frontal camera barely sees depth.
-// hipHingeTracker.js and shoulderFlexionTracker.js still exist (someone might
-// use a side camera for those specifically) but are deliberately left out of
-// this registry: under an all-frontal setup they'd silently produce unreliable
-// counts, and an honest "no engine yet" badge beats a wrong "Live Tracking" one.
+//
+// Camera orientation is exercise-position-dependent, confirmed: standing
+// exercises use a FRONTAL camera (patient faces it); exercises done lying
+// down keep the original SIDE-ON view. That flips which movements are
+// trackable for standing exercises specifically — sideways motion
+// (abduction) became reliable, forward motion (flexion, hinging) became
+// unreliable, since a frontal camera barely sees depth. hipHingeTracker.js
+// and shoulderFlexionTracker.js still exist (someone might use a side
+// camera for those specifically) but are deliberately left out of the
+// registry below: silently counting reps from an unreliable signal is worse
+// than an honest "no engine yet" badge.
 import { createDeadBugTracker } from "./deadBugTracker.js";
 import { createGluteBridgeTracker } from "./gluteBridgeTracker.js";
 import { createBirdDogTracker } from "./birdDogTracker.js";
@@ -23,20 +26,28 @@ import { createShoulderAbductionTracker } from "./shoulderAbductionTracker.js";
 import { createHipAbductionTracker } from "./hipAbductionTracker.js";
 
 export const TRACKED_EXERCISE_COMPONENTS = {
-  e4: createDeadBugTracker,             // Dead Bug — camera placement TBD, see note below
-  e3: createGluteBridgeTracker,         // Glute Bridge — camera placement TBD, see note below
-  e5: createBirdDogTracker,             // Bird Dog — camera placement TBD, see note below
-  e17: createSingleLegBridgeTracker,    // Single Leg Bridge — camera placement TBD, see note below
-  e9: createSquatTracker,               // Bodyweight Squat — vertical motion, frontal-safe
-  e15: createSitToStandTracker,         // Sit-to-Stand — vertical motion, frontal-safe
-  e16: createHeelRaiseTracker,          // Heel Raises — vertical motion, frontal-safe
-  e14: createShoulderAbductionTracker,  // Shoulder Abduction — sideways motion, frontal-correct
-  e18: createHipAbductionTracker,       // Standing Hip Abduction — sideways motion, frontal-correct
+  e4: createDeadBugTracker,             // Dead Bug — lying down, side view
+  e3: createGluteBridgeTracker,         // Glute Bridge — lying down, side view
+  e5: createBirdDogTracker,             // Bird Dog — hands & knees, side view
+  e17: createSingleLegBridgeTracker,    // Single Leg Bridge — lying down, side view
+  e9: createSquatTracker,               // Bodyweight Squat — standing, frontal
+  e15: createSitToStandTracker,         // Sit-to-Stand — standing, frontal
+  e16: createHeelRaiseTracker,          // Heel Raises — standing, frontal
+  e14: createShoulderAbductionTracker,  // Shoulder Abduction — standing, frontal
+  e18: createHipAbductionTracker,       // Standing Hip Abduction — standing, frontal
 };
 
-// NOT YET RECONCILED WITH FRONTAL CAMERA: the 4 floor exercises above (Dead
-// Bug, Glute Bridge, Bird Dog, Single Leg Bridge) were all built assuming a
-// side-on view of someone lying down. "Frontal" doesn't have one obvious
-// meaning for a person lying flat (overhead? camera at the feet? something
-// else?) — left in the registry rather than pulled, but their real-world
-// accuracy under whatever "frontal" turns out to mean here is unverified.
+// Which camera orientation each tracked exercise expects — drives the
+// on-screen setup tip in TrackedExerciseSession.jsx so the instruction shown
+// actually matches the exercise, instead of one blanket message.
+export const TRACKER_CAMERA_ORIENTATION = {
+  e4: "side",
+  e3: "side",
+  e5: "side",
+  e17: "side",
+  e9: "frontal",
+  e15: "frontal",
+  e16: "frontal",
+  e14: "frontal",
+  e18: "frontal",
+};
