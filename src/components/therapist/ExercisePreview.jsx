@@ -14,6 +14,14 @@ import TrackedExerciseSession from "../patient/TrackedExerciseSession.jsx";
  * an exercise (including live camera tracking) before it ever reaches a
  * patient. Nothing from a preview session is saved anywhere — no session
  * log, no adherence data, no rep history.
+ *
+ * Renders as a true full-screen takeover with the exact same container
+ * structure PatientApp.jsx uses (not a floating modal card) — on a phone
+ * this fills the screen edge to edge just like the real patient view; on a
+ * wide screen it centers as the same phone-width column patient view uses,
+ * for the same reason. A "Preview" badge floats in the corner without
+ * taking up layout space, so it stays visually identical to what a patient
+ * actually sees while still being unmistakably a preview.
  */
 export default function ExercisePreview({ ex, prescribed = null, onClose }) {
   const [stage, setStage] = useState("detail"); // detail | session | complete
@@ -27,14 +35,11 @@ export default function ExercisePreview({ ex, prescribed = null, onClose }) {
   const trackerFactory = TRACKED_EXERCISE_COMPONENTS[ex.id];
 
   return (
-    <div className="fixed inset-0 bg-gray-900/60 z-50 flex items-center justify-center p-4">
-      <div
-        className="w-full max-w-md bg-gray-50 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
-        style={{ height: "min(720px, 92vh)" }}
-      >
-        <div className="px-4 py-2 bg-violet-600 text-white text-[11px] font-medium text-center shrink-0">
-          Therapist Preview — this is exactly what a patient sees. Nothing is saved.
-        </div>
+    <div className="fixed inset-0 z-50 min-h-screen bg-gray-200 flex justify-center">
+      <div className="w-full max-w-md bg-gray-50 min-h-screen flex flex-col shadow-xl relative">
+        <span className="absolute top-2 right-2 z-10 bg-violet-600 text-white text-[10px] font-semibold px-2.5 py-1 rounded-full shadow">
+          Preview
+        </span>
 
         {stage === "detail" && (
           <PatientExerciseDetail ex={ex} prescribed={prescribed} onBack={onClose} onStart={() => setStage("session")} />
