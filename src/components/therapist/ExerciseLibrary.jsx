@@ -1,21 +1,23 @@
 import React, { useState } from "react";
-import { Search, Filter, Dumbbell, Video, Plus, Upload, Play, X as XIcon, Eye } from "lucide-react";
+import { Search, Filter, Dumbbell, Video, Plus, Upload, Play, X as XIcon, Eye, Pencil } from "lucide-react";
 import { Pill, PageHeader, Button } from "../ui/Atoms.jsx";
 import { Modal, Field, inputClass } from "../ui/Modal.jsx";
 import { REGIONS } from "../../data/seed.js";
 import { TRACKED_EXERCISE_COMPONENTS } from "../../lib/trackedExercises.js";
 import ExercisePreview from "./ExercisePreview.jsx";
 
-export function ExerciseLibraryView({ exercises, onAddExercise, onUpdateVideo }) {
+export function ExerciseLibraryView({ exercises, onAddExercise, onEditExercise, onUpdateVideo }) {
   const [query, setQuery] = useState("");
   const [region, setRegion] = useState("All");
   const [videoTargetId, setVideoTargetId] = useState(null);
   const [previewTargetId, setPreviewTargetId] = useState(null);
+  const [editTargetId, setEditTargetId] = useState(null);
   const filtered = exercises.filter(
     (e) => (region === "All" || e.region === region) && e.name.toLowerCase().includes(query.toLowerCase())
   );
   const videoTarget = exercises.find((e) => e.id === videoTargetId);
   const previewTarget = exercises.find((e) => e.id === previewTargetId);
+  const editTarget = exercises.find((e) => e.id === editTargetId);
 
   return (
     <div>
@@ -64,12 +66,21 @@ export function ExerciseLibraryView({ exercises, onAddExercise, onUpdateVideo })
             <p className="text-xs text-gray-400 mb-2">{ex.region} · {ex.difficulty}</p>
             <p className="text-xs text-gray-500 mb-1">{ex.sets} sets × {ex.reps} · rest {ex.rest}</p>
             {ex.frequency && <p className="text-xs text-gray-400 mb-3">{ex.frequency}</p>}
-            <button
-              onClick={() => setPreviewTargetId(ex.id)}
-              className="w-full flex items-center justify-center gap-1.5 text-xs font-medium text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-xl py-2 mb-2"
-            >
-              <Eye size={13} /> Preview as patient
-            </button>
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                onClick={() => setPreviewTargetId(ex.id)}
+                className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-xl py-2"
+              >
+                <Eye size={13} /> Preview as patient
+              </button>
+              <button
+                onClick={() => setEditTargetId(ex.id)}
+                className="w-9 flex items-center justify-center text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-xl py-2 shrink-0"
+                title="Edit exercise"
+              >
+                <Pencil size={13} />
+              </button>
+            </div>
             <div className="flex items-center gap-2 flex-wrap mt-2">
               {TRACKED_EXERCISE_COMPONENTS[ex.id] ? (
                 <Pill tone="violet"><span className="inline-flex items-center gap-1"><Video size={11} /> Live Tracking</span></Pill>
@@ -96,6 +107,14 @@ export function ExerciseLibraryView({ exercises, onAddExercise, onUpdateVideo })
 
       {previewTarget && (
         <ExercisePreview ex={previewTarget} onClose={() => setPreviewTargetId(null)} />
+      )}
+
+      {editTarget && (
+        <AddExerciseModal
+          existing={editTarget}
+          onClose={() => setEditTargetId(null)}
+          onAdd={(fields) => { onEditExercise(editTarget.id, fields); setEditTargetId(null); }}
+        />
       )}
 
       {videoTarget && (
@@ -155,10 +174,14 @@ function AddVideoModal({ ex, onClose, onSave }) {
   );
 }
 
-export function AddExerciseModal({ onClose, onAdd }) {
-  const [form, setForm] = useState({ name: "", region: "Core", difficulty: "Beginner", sets: 3, reps: "10", rest: "30 sec", frequency: "Daily", tracking: false, videoFile: null });
+export function AddExerciseModal({ existing = null, onClose, onAdd }) {
+  const [form, setForm] = useState(
+    existing
+      ? { name: existing.name, region: existing.region, difficulty: existing.difficulty, sets: existing.sets, reps: existing.reps, rest: existing.rest, frequency: existing.frequency || "Daily", tracking: existing.tracking, videoFile: null }
+      : { name: "", region: "Core", difficulty: "Beginner", sets: 3, reps: "10", rest: "30 sec", frequency: "Daily", tracking: false, videoFile: null }
+  );
   return (
-    <Modal title="Add Exercise" onClose={onClose}>
+    <Modal title={existing ? `Edit · ${existing.name}` : "Add Exercise"} onClose={onClose}>
       <Field label="Exercise name">
         <input className={inputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
       </Field>
@@ -190,7 +213,7 @@ export function AddExerciseModal({ onClose, onAdd }) {
           <option>Daily</option><option>2x/day</option><option>3x/week</option><option>5x/week</option><option>Alternate days</option>
         </select>
       </Field>
-      <VideoUploadField file={form.videoFile} onChange={(f) => setForm({ ...form, videoFile: f })} />
+      {!existing && <VideoUploadField file={form.videoFile} onChange={(f) => setForm({ ...form, videoFile: f })} />}
       <label className="flex items-start gap-2 mt-3 mb-2">
         <input type="checkbox" checked={form.tracking} onChange={(e) => setForm({ ...form, tracking: e.target.checked })} className="mt-0.5" />
         <span className="text-sm text-gray-600">
@@ -200,7 +223,7 @@ export function AddExerciseModal({ onClose, onAdd }) {
       </label>
       <div className="flex justify-end gap-2 mt-4">
         <Button variant="ghost" onClick={onClose}>Cancel</Button>
-        <Button onClick={() => { if (form.name) onAdd(form); }}>Add Exercise</Button>
+        <Button onClick={() => { if (form.name) onAdd(form); }}>{existing ? "Save Changes" : "Add Exercise"}</Button>
       </div>
     </Modal>
   );

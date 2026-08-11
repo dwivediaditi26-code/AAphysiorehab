@@ -22,6 +22,15 @@ import TrackedExerciseSession from "../patient/TrackedExerciseSession.jsx";
  * for the same reason. A "Preview" badge floats in the corner without
  * taking up layout space, so it stays visually identical to what a patient
  * actually sees while still being unmistakably a preview.
+ *
+ * Uses an explicit 100dvh (dynamic viewport height) rather than min-h-screen
+ * for the outer fixed layer — `position: fixed` + a min-height (not a firm
+ * height) is a known combo that breaks mobile browsers' scroll math when
+ * their address bar shows/hides, which was cutting the Start Exercise
+ * button off below the visible screen with no way to reach it. dvh tracks
+ * the real visible viewport instead. Also carries its own overflow-y-auto
+ * as a safety net so nothing can ever end up unreachable, even if content
+ * (longer instructions, larger fonts, etc.) grows taller than the screen.
  */
 export default function ExercisePreview({ ex, prescribed = null, onClose }) {
   const [stage, setStage] = useState("detail"); // detail | session | complete
@@ -35,8 +44,11 @@ export default function ExercisePreview({ ex, prescribed = null, onClose }) {
   const trackerFactory = TRACKED_EXERCISE_COMPONENTS[ex.id];
 
   return (
-    <div className="fixed inset-0 z-50 min-h-screen bg-gray-200 flex justify-center">
-      <div className="w-full max-w-md bg-gray-50 min-h-screen flex flex-col shadow-xl relative">
+    <div
+      className="fixed inset-0 z-50 bg-gray-200 flex justify-center overflow-y-auto"
+      style={{ height: "100dvh" }}
+    >
+      <div className="w-full max-w-md bg-gray-50 flex flex-col shadow-xl relative" style={{ minHeight: "100dvh" }}>
         <span className="absolute top-2 right-2 z-10 bg-violet-600 text-white text-[10px] font-semibold px-2.5 py-1 rounded-full shadow">
           Preview
         </span>

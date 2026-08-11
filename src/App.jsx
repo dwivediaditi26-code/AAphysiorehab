@@ -103,6 +103,13 @@ export default function PhysioRehabApp() {
     setExercises((prev) => prev.map((e) => (e.id === id ? { ...e, videoUrl } : e)));
   }
 
+  function updateExercise(id, fields) {
+    setExercises((prev) => prev.map((e) => (e.id === id
+      ? { ...e, name: fields.name, region: fields.region, difficulty: fields.difficulty, sets: Number(fields.sets) || 1, reps: fields.reps, rest: fields.rest, frequency: fields.frequency, tracking: fields.tracking }
+      : e
+    )));
+  }
+
   function sendMessage(patientId, text, from) {
     setMessages((prev) => ({ ...prev, [patientId]: [...(prev[patientId] || []), { from, text, time: "Just now" }] }));
   }
@@ -183,7 +190,7 @@ export default function PhysioRehabApp() {
         )}
 
         {view === "library" && (
-          <ExerciseLibraryView exercises={exercises} onAddExercise={() => setShowAddExercise(true)} onUpdateVideo={updateExerciseVideo} />
+          <ExerciseLibraryView exercises={exercises} onAddExercise={() => setShowAddExercise(true)} onEditExercise={updateExercise} onUpdateVideo={updateExerciseVideo} />
         )}
 
         {view === "plans" && plans[planBuilderPatient.id] && (
