@@ -24,6 +24,9 @@ import { createSitToStandTracker } from "./sitToStandTracker.js";
 import { createHeelRaiseTracker } from "./heelRaiseTracker.js";
 import { createShoulderAbductionTracker } from "./shoulderAbductionTracker.js";
 import { createHipAbductionTracker } from "./hipAbductionTracker.js";
+import { createSupermanTracker } from "./supermanTracker.js";
+import { createPronePressUpTracker } from "./pronePressUpTracker.js";
+import { createSideLyingLegRaiseTracker } from "./sideLyingLegRaiseTracker.js";
 
 export const TRACKED_EXERCISE_COMPONENTS = {
   e4: createDeadBugTracker,             // Dead Bug — lying down, side view
@@ -35,6 +38,9 @@ export const TRACKED_EXERCISE_COMPONENTS = {
   e16: createHeelRaiseTracker,          // Heel Raises — standing, frontal
   e14: createShoulderAbductionTracker,  // Shoulder Abduction — standing, frontal
   e18: createHipAbductionTracker,       // Standing Hip Abduction — standing, frontal
+  e22: createSupermanTracker,           // Superman — prone, side view
+  e27: createPronePressUpTracker,       // Prone Press-Up — prone, side view
+  e19: createSideLyingLegRaiseTracker,  // Side-Lying Leg Raise — side-lying, side view
 };
 
 // Which camera orientation each tracked exercise expects — drives the
@@ -50,4 +56,7 @@ export const TRACKER_CAMERA_ORIENTATION = {
   e16: "frontal",
   e14: "frontal",
   e18: "frontal",
+  e22: "side",
+  e27: "side",
+  e19: "side",
 };

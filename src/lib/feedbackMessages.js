@@ -170,4 +170,43 @@ export const FEEDBACK_MESSAGES = {
     voiceEn: "Good",
     voiceHi: "बढ़िया",
   },
+  liftTogether: {
+    en: "Lift chest and legs together",
+    hi: "छाती और पैर एक साथ उठाएं",
+    voiceEn: "Lift together",
+    voiceHi: "साथ में उठाएं",
+  },
+  goodSuperman: {
+    good: true,
+    en: "Good lift, controlled tempo",
+    hi: "अच्छी ऊंचाई, गति नियंत्रित रही",
+    voiceEn: "Good",
+    voiceHi: "बढ़िया",
+  },
+  keepHipsDown: {
+    en: "Keep your hips on the floor",
+    hi: "कूल्हों को ज़मीन पर रखें",
+    voiceEn: "Hips down",
+    voiceHi: "कूल्हे नीचे",
+  },
+  goodPressUp: {
+    good: true,
+    en: "Good press, controlled tempo",
+    hi: "अच्छा प्रेस, गति नियंत्रित रही",
+    voiceEn: "Good",
+    voiceHi: "बढ़िया",
+  },
+  keepBottomLegStill: {
+    en: "Keep your bottom leg still",
+    hi: "नीचे वाले पैर को स्थिर रखें",
+    voiceEn: "Bottom leg still",
+    voiceHi: "नीचे वाला पैर स्थिर",
+  },
+  goodLegRaise: {
+    good: true,
+    en: "Good height, controlled tempo",
+    hi: "अच्छी ऊंचाई, गति नियंत्रित रही",
+    voiceEn: "Good",
+    voiceHi: "बढ़िया",
+  },
 };

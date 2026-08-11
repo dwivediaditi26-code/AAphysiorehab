@@ -19,15 +19,15 @@ export const EXERCISES_SEED = [
   { id: "e16", name: "Heel Raises", region: "Lower Limb", difficulty: "Beginner", sets: 3, reps: "15", rest: "30 sec", frequency: "Daily", tracking: true },
   { id: "e17", name: "Single Leg Bridge", region: "Lumbar / Core", difficulty: "Intermediate", sets: 2, reps: "8 each side", rest: "30 sec", frequency: "3x/week", tracking: true },
   { id: "e18", name: "Standing Hip Abduction", region: "Hip", difficulty: "Beginner", sets: 3, reps: "12 each side", rest: "30 sec", frequency: "Daily", tracking: true },
-  { id: "e19", name: "Side-Lying Leg Raise", region: "Hip", difficulty: "Beginner", sets: 2, reps: "12 each side", rest: "30 sec", frequency: "Daily", tracking: false },
+  { id: "e19", name: "Side-Lying Leg Raise", region: "Hip", difficulty: "Beginner", sets: 2, reps: "12 each side", rest: "30 sec", frequency: "Daily", tracking: true },
   { id: "e20", name: "Adductor Squeeze", region: "Hip", difficulty: "Beginner", sets: 3, reps: "10 sec hold", rest: "15 sec", frequency: "Daily", tracking: false },
   { id: "e21", name: "Slump Neural Slide", region: "Spine", difficulty: "Intermediate", sets: 2, reps: "10", rest: "30 sec", frequency: "3x/week", tracking: false },
-  { id: "e22", name: "Superman", region: "Spine", difficulty: "Intermediate", sets: 2, reps: "8", rest: "30 sec", frequency: "3x/week", tracking: false },
+  { id: "e22", name: "Superman", region: "Spine", difficulty: "Intermediate", sets: 2, reps: "8", rest: "30 sec", frequency: "3x/week", tracking: true },
   { id: "e23", name: "Front Plank", region: "Core", difficulty: "Intermediate", sets: 3, reps: "20 sec hold", rest: "30 sec", frequency: "3x/week", tracking: false },
   { id: "e24", name: "Child's Pose", region: "Spine", difficulty: "Beginner", sets: 1, reps: "30 sec hold", rest: "—", frequency: "Daily", tracking: false },
   { id: "e25", name: "Knee-to-Chest Stretch", region: "Lumbar", difficulty: "Beginner", sets: 2, reps: "30 sec hold each side", rest: "—", frequency: "Daily", tracking: false },
   { id: "e26", name: "Piriformis Stretch", region: "Hip", difficulty: "Beginner", sets: 2, reps: "30 sec hold each side", rest: "—", frequency: "Daily", tracking: false },
-  { id: "e27", name: "Prone Press-Up", region: "Lumbar", difficulty: "Beginner", sets: 1, reps: "10", rest: "—", frequency: "Daily", tracking: false },
+  { id: "e27", name: "Prone Press-Up", region: "Lumbar", difficulty: "Beginner", sets: 1, reps: "10", rest: "—", frequency: "Daily", tracking: true },
   { id: "e28", name: "Standing Extension", region: "Lumbar", difficulty: "Beginner", sets: 1, reps: "10", rest: "—", frequency: "Daily", tracking: false },
 ];
 

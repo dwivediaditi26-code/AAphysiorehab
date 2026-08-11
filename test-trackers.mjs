@@ -10,6 +10,9 @@ import { createSitToStandTracker } from "./src/lib/sitToStandTracker.js";
 import { createHeelRaiseTracker } from "./src/lib/heelRaiseTracker.js";
 import { createShoulderAbductionTracker } from "./src/lib/shoulderAbductionTracker.js";
 import { createHipAbductionTracker } from "./src/lib/hipAbductionTracker.js";
+import { createSupermanTracker } from "./src/lib/supermanTracker.js";
+import { createPronePressUpTracker } from "./src/lib/pronePressUpTracker.js";
+import { createSideLyingLegRaiseTracker } from "./src/lib/sideLyingLegRaiseTracker.js";
 
 function lm(overrides = {}) {
   // 33 default landmarks in a neutral standing/lying pose, all high visibility.
@@ -192,6 +195,41 @@ test("Standing Hip Abduction (hipAbductionTracker.js)", () => {
   }, 120);
 });
 
+// Superman: shoulders and ankles both rise off the floor together, after a
+// calibration window at rest.
+test("Superman (supermanTracker.js)", () => {
+  const tracker = createSupermanTracker();
+  return runSequence(tracker, (t) => {
+    if (t < 0.12) return lm(); // calibration frames at rest
+    const p = triangle((t - 0.12) / 0.88);
+    return lm({
+      11: { y: lerp(0.3, 0.15, p) }, 12: { y: lerp(0.3, 0.15, p) },
+      27: { y: lerp(0.9, 0.75, p) }, 28: { y: lerp(0.9, 0.75, p) },
+    });
+  }, 130);
+});
+
+// Prone Press-Up: shoulders rise, hips stay near baseline (unlike Superman).
+test("Prone Press-Up (pronePressUpTracker.js)", () => {
+  const tracker = createPronePressUpTracker();
+  return runSequence(tracker, (t) => {
+    if (t < 0.12) return lm();
+    const p = triangle((t - 0.12) / 0.88);
+    return lm({ 11: { y: lerp(0.3, 0.1, p) }, 12: { y: lerp(0.3, 0.1, p) } });
+  }, 130);
+});
+
+// Side-Lying Leg Raise: left ankle lifts relative to its calibrated baseline
+// (image-vertical, camera upright to the side of the mat), right ankle stays put.
+test("Side-Lying Leg Raise (sideLyingLegRaiseTracker.js)", () => {
+  const tracker = createSideLyingLegRaiseTracker();
+  return runSequence(tracker, (t) => {
+    if (t < 0.15) return lm();
+    const p = triangle((t - 0.15) / 0.85);
+    return lm({ 27: { y: lerp(0.9, 0.65, p) } });
+  }, 130);
+});
+
 console.log("\n--- Tracker verification (synthetic movement, one clean rep) ---\n");
 let allOk = true;
 for (const r of results) {
@@ -199,7 +237,7 @@ for (const r of results) {
   if (!r.ok) allOk = false;
   console.log(`${status}  ${r.name}  →  reps counted: ${r.error ? "ERROR: " + r.error : r.count}`);
 }
-console.log(`\n${allOk ? "All 9 trackers counted at least 1 rep from a clean synthetic movement." : "One or more trackers failed — see above."}\n`);
+console.log(`\n${allOk ? `All ${results.length} trackers counted at least 1 rep from a clean synthetic movement.` : "One or more trackers failed — see above."}\n`);
 let overallOk = allOk;
 
 // Negative control: static pose, zero movement — every tracker should report 0.
@@ -214,6 +252,9 @@ const staticTests = [
   ["Heel Raises", createHeelRaiseTracker],
   ["Shoulder Abduction", createShoulderAbductionTracker],
   ["Standing Hip Abduction", createHipAbductionTracker],
+  ["Superman", createSupermanTracker],
+  ["Prone Press-Up", createPronePressUpTracker],
+  ["Side-Lying Leg Raise", createSideLyingLegRaiseTracker],
 ];
 let staticOk = true;
 for (const [name, factory] of staticTests) {
