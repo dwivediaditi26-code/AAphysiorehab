@@ -19,6 +19,16 @@ export const EXERCISES_SEED = [
   { id: "e16", name: "Heel Raises", region: "Lower Limb", difficulty: "Beginner", sets: 3, reps: "15", rest: "30 sec", frequency: "Daily", tracking: true },
   { id: "e17", name: "Single Leg Bridge", region: "Lumbar / Core", difficulty: "Intermediate", sets: 2, reps: "8 each side", rest: "30 sec", frequency: "3x/week", tracking: true },
   { id: "e18", name: "Standing Hip Abduction", region: "Hip", difficulty: "Beginner", sets: 3, reps: "12 each side", rest: "30 sec", frequency: "Daily", tracking: true },
+  { id: "e19", name: "Side-Lying Leg Raise", region: "Hip", difficulty: "Beginner", sets: 2, reps: "12 each side", rest: "30 sec", frequency: "Daily", tracking: false },
+  { id: "e20", name: "Adductor Squeeze", region: "Hip", difficulty: "Beginner", sets: 3, reps: "10 sec hold", rest: "15 sec", frequency: "Daily", tracking: false },
+  { id: "e21", name: "Slump Neural Slide", region: "Spine", difficulty: "Intermediate", sets: 2, reps: "10", rest: "30 sec", frequency: "3x/week", tracking: false },
+  { id: "e22", name: "Superman", region: "Spine", difficulty: "Intermediate", sets: 2, reps: "8", rest: "30 sec", frequency: "3x/week", tracking: false },
+  { id: "e23", name: "Front Plank", region: "Core", difficulty: "Intermediate", sets: 3, reps: "20 sec hold", rest: "30 sec", frequency: "3x/week", tracking: false },
+  { id: "e24", name: "Child's Pose", region: "Spine", difficulty: "Beginner", sets: 1, reps: "30 sec hold", rest: "—", frequency: "Daily", tracking: false },
+  { id: "e25", name: "Knee-to-Chest Stretch", region: "Lumbar", difficulty: "Beginner", sets: 2, reps: "30 sec hold each side", rest: "—", frequency: "Daily", tracking: false },
+  { id: "e26", name: "Piriformis Stretch", region: "Hip", difficulty: "Beginner", sets: 2, reps: "30 sec hold each side", rest: "—", frequency: "Daily", tracking: false },
+  { id: "e27", name: "Prone Press-Up", region: "Lumbar", difficulty: "Beginner", sets: 1, reps: "10", rest: "—", frequency: "Daily", tracking: false },
+  { id: "e28", name: "Standing Extension", region: "Lumbar", difficulty: "Beginner", sets: 1, reps: "10", rest: "—", frequency: "Daily", tracking: false },
 ];
 
 export const CONDITION_EXERCISE_MAP = {
@@ -160,6 +170,69 @@ export const INSTRUCTIONS_MAP = {
     { en: "Lift the other leg out to the side, keeping the toes forward", hi: "दूसरे पैर को बगल में उठाएं, पंजे आगे की ओर रखें" },
     { en: "Avoid leaning your torso to compensate", hi: "शरीर को झुकाकर संतुलन न बनाएं" },
     { en: "Lower with control and repeat", hi: "नियंत्रण से नीचे लाएं और दोहराएं" },
+  ],
+  e19: [
+    { en: "Lie on your side, legs stacked, body in a straight line", hi: "करवट लेकर लेटें, पैर एक के ऊपर एक रखें, शरीर सीधी रेखा में हो" },
+    { en: "Keep your top leg straight and lift it toward the ceiling", hi: "ऊपर वाले पैर को सीधा रखें और छत की ओर उठाएं" },
+    { en: "Keep your hips stacked, don't let them roll back", hi: "कूल्हों को सीध में रखें, पीछे की ओर न मुड़ने दें" },
+    { en: "Lower with control and repeat, then switch sides", hi: "नियंत्रण से नीचे लाएं और दोहराएं, फिर दूसरी तरफ करें" },
+  ],
+  e20: [
+    { en: "Lie on your back, knees bent, feet flat", hi: "पीठ के बल लेटें, घुटने मुड़े हों, पैर ज़मीन पर सपाट हों" },
+    { en: "Place a small ball or pillow between your knees", hi: "घुटनों के बीच एक छोटी गेंद या तकिया रखें" },
+    { en: "Gently squeeze the ball, engaging your inner thighs and core", hi: "गेंद को धीरे से दबाएं, जांघों के अंदरूनी हिस्से और कोर को सक्रिय करें" },
+    { en: "Hold, breathing normally, then release with control", hi: "सामान्य सांस लेते हुए रोकें, फिर नियंत्रण से छोड़ें" },
+  ],
+  e21: [
+    { en: "Sit tall at the edge of a chair, hands resting behind you on the seat", hi: "कुर्सी के किनारे पर सीधे बैठें, हाथ पीछे सीट पर टिकाएं" },
+    { en: "Gently slump your back and tuck your chin, then straighten one knee while lifting your chin up", hi: "धीरे से पीठ को झुकाएं और ठुड्डी को नीचे करें, फिर एक घुटना सीधा करते हुए ठुड्डी ऊपर उठाएं" },
+    { en: "Reverse together: round your back and chin down as you bend the knee back down", hi: "साथ में उल्टा करें: पीठ को गोल करें और ठुड्डी नीचे करें जैसे ही घुटना वापस मोड़ें" },
+    { en: "Move smoothly between the two positions — this should feel like a gentle stretch, never sharp pain", hi: "दोनों स्थितियों के बीच सहजता से घूमें — यह हल्का खिंचाव जैसा महसूस होना चाहिए, तेज़ दर्द नहीं" },
+    { en: "Stop and tell your therapist if you feel tingling, numbness, or pain spreading down your leg", hi: "अगर पैर में झनझनाहट, सुन्नपन, या दर्द फैलता महसूस हो तो रुकें और अपने थेरेपिस्ट को बताएं" },
+  ],
+  e22: [
+    { en: "Lie face down, arms extended overhead, legs straight", hi: "पेट के बल लेटें, हाथ ऊपर की ओर सीधे फैलाएं, पैर सीधे रखें" },
+    { en: "Lift arms, chest, and legs off the floor at the same time, using your back and glutes", hi: "पीठ और ग्लूट्स का उपयोग करते हुए हाथ, छाती और पैरों को एक साथ ज़मीन से ऊपर उठाएं" },
+    { en: "Hold briefly at the top, keeping your neck relaxed", hi: "ऊपर थोड़ी देर रुकें, गर्दन को ढीला रखें" },
+    { en: "Lower with control back to the start", hi: "नियंत्रण से वापस शुरुआती स्थिति में आएं" },
+    { en: "This loads the lower back more than Bird Dog — your therapist may prefer Bird Dog if you're sensitive to spinal loading", hi: "यह कमर पर बर्ड डॉग से ज़्यादा दबाव डालता है — अगर कमर संवेदनशील है तो थेरेपिस्ट बर्ड डॉग को प्राथमिकता दे सकते हैं" },
+  ],
+  e23: [
+    { en: "Lie face down, prop up on forearms and toes", hi: "पेट के बल लेटें, कोहनियों और पंजों के बल ऊपर उठें" },
+    { en: "Keep your body in a straight line from head to heels", hi: "सिर से एड़ी तक शरीर को एक सीधी रेखा में रखें" },
+    { en: "Brace your core, avoid letting your hips sag or pike up", hi: "कोर को कसें, कूल्हों को न झुकने दें और न ऊपर उठने दें" },
+    { en: "Hold, breathing normally, then release with control", hi: "सामान्य सांस लेते हुए रोकें, फिर नियंत्रण से छोड़ें" },
+  ],
+  e24: [
+    { en: "Kneel on the floor, big toes touching, knees apart", hi: "ज़मीन पर घुटनों के बल बैठें, अंगूठे मिले हों, घुटने अलग रखें" },
+    { en: "Sit back onto your heels and fold forward, arms reaching ahead", hi: "एड़ियों पर बैठते हुए आगे झुकें, हाथ आगे की ओर फैलाएं" },
+    { en: "Let your forehead rest on the floor, breathe into your lower back", hi: "माथे को ज़मीन पर टिकाएं, कमर की ओर सांस लें" },
+    { en: "Hold gently, come out slowly if you feel any pinching", hi: "धीरे से रोकें, अगर कहीं दबाव महसूस हो तो धीरे से बाहर आएं" },
+  ],
+  e25: [
+    { en: "Lie on your back, knees bent, feet flat", hi: "पीठ के बल लेटें, घुटने मुड़े हों, पैर ज़मीन पर सपाट हों" },
+    { en: "Bring one knee toward your chest, holding behind the thigh", hi: "एक घुटने को छाती की ओर लाएं, जांघ के पीछे पकड़ें" },
+    { en: "Keep your lower back gently pressed to the floor", hi: "कमर को धीरे से ज़मीन पर दबाए रखें" },
+    { en: "Hold, then switch sides", hi: "रोकें, फिर दूसरी तरफ करें" },
+  ],
+  e26: [
+    { en: "Lie on your back, knees bent, feet flat", hi: "पीठ के बल लेटें, घुटने मुड़े हों, पैर ज़मीन पर सपाट हों" },
+    { en: "Cross one ankle over the opposite knee", hi: "एक टखने को दूसरे घुटने के ऊपर क्रॉस करें" },
+    { en: "Gently pull the uncrossed thigh toward your chest until you feel a stretch in the hip", hi: "बिना क्रॉस वाली जांघ को धीरे से छाती की ओर खींचें जब तक कूल्हे में खिंचाव महसूस न हो" },
+    { en: "Hold, then switch sides", hi: "रोकें, फिर दूसरी तरफ करें" },
+  ],
+  e27: [
+    { en: "Lie face down, hands under your shoulders", hi: "पेट के बल लेटें, हाथ कंधों के नीचे रखें" },
+    { en: "Slowly press your chest up, letting your hips stay on the floor", hi: "धीरे-धीरे छाती को ऊपर उठाएं, कूल्हे ज़मीन पर टिके रहें" },
+    { en: "Keep your lower back relaxed — this is a gentle press, not a strong push", hi: "कमर को ढीला रखें — यह हल्का दबाव है, ज़ोर से धक्का नहीं" },
+    { en: "Lower back down with control", hi: "नियंत्रण से वापस नीचे आएं" },
+    { en: "Often used for pain that centralizes with extension — check with your therapist which direction suits you", hi: "यह अक्सर उस दर्द के लिए उपयोग होता है जो पीछे झुकने से केंद्र की ओर आता है — अपने थेरेपिस्ट से पूछें कि कौन सी दिशा आपके लिए सही है" },
+  ],
+  e28: [
+    { en: "Stand tall, feet hip-width apart", hi: "सीधे खड़े हों, पैर कूल्हों जितनी दूरी पर हों" },
+    { en: "Place your hands on your lower back for support", hi: "हाथों को सहारे के लिए कमर पर रखें" },
+    { en: "Gently lean backward from your hips, looking slightly upward", hi: "कूल्हों से धीरे से पीछे की ओर झुकें, थोड़ा ऊपर देखें" },
+    { en: "Return to standing with control — move only as far as feels comfortable", hi: "नियंत्रण से वापस सीधे खड़े हों — जितना आरामदायक लगे उतना ही झुकें" },
   ],
 };
 export const DEFAULT_INSTRUCTIONS = [
