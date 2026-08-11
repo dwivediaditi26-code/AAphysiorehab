@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
-import { X, Pause, Play, AlertTriangle, Volume2, VolumeX } from "lucide-react";
+import { X, Pause, Play, AlertTriangle, VolumeX } from "lucide-react";
 import { parseRepsTarget } from "../../lib/helpers.js";
 import { isWholeBodyInFrame, hasMinimalPose } from "../../lib/trackingMath.js";
 import { FEEDBACK_MESSAGES as M } from "../../lib/feedbackMessages.js";
 import { TRACKER_CAMERA_ORIENTATION } from "../../lib/trackedExercises.js";
 import { createVoiceCoach } from "../../lib/voiceCoach.js";
+import { numberWord } from "../../lib/numberWords.js";
 
 /**
  * Real camera + MediaPipe Pose Landmarker exercise-tracking screen. Generic —
@@ -79,6 +80,7 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
   const [framingOk, setFramingOk] = useState(true);
   const [personVisible, setPersonVisible] = useState(true);
   const [voiceOn, setVoiceOn] = useState(voiceCoachRef.current.isSupported());
+  const [voiceLang, setVoiceLang] = useState("en"); // 'en' | 'hi'
 
   const targetReps = parseRepsTarget(prescribed ? prescribed.reps : ex.reps);
 
@@ -139,21 +141,19 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
               const repJustCompleted = count > prevRepsRef.current;
               prevRepsRef.current = count;
 
-              if (!fullyFramed) {
+              if (repJustCompleted) {
+                // Always announce the count out loud on every completed rep —
+                // the whole point if you're not looking at the screen. Fold in
+                // a correction too when one's active that rep, same utterance.
+                const num = numberWord(count, "en"), numHi = numberWord(count, "hi");
+                const primary = fullyFramed ? currentFeedback[0] : null;
+                const hasCorrection = primary && !primary.good;
+                const announcement = hasCorrection
+                  ? { voiceEn: `${num}. ${primary.voiceEn}`, voiceHi: `${numHi}. ${primary.voiceHi}` }
+                  : { voiceEn: num, voiceHi: numHi };
+                voiceCoachRef.current.speak(announcement, `rep-${count}`);
+              } else if (!fullyFramed) {
                 voiceCoachRef.current.speak(M.moveBackFullBody, "moveBack");
-              } else {
-                const primary = currentFeedback[0];
-                if (primary && !primary.good) {
-                  // An active correction: keep saying it, rate-limited by key so it
-                  // doesn't repeat every frame but does repeat every few seconds
-                  // while the issue persists.
-                  voiceCoachRef.current.speak(primary, primary.voiceEn);
-                } else if (repJustCompleted && primary) {
-                  // Good form: stay quiet mid-rep (no nagging "good" every frame),
-                  // but acknowledge each completed rep once so there's always
-                  // audible confirmation the voice coach is actually running.
-                  voiceCoachRef.current.speak(primary, `rep-${count}`);
-                }
               }
 
               if (count >= targetReps) {
@@ -189,6 +189,10 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
   useEffect(() => {
     voiceCoachRef.current.setEnabled(voiceOn);
   }, [voiceOn]);
+
+  useEffect(() => {
+    voiceCoachRef.current.setLanguage(voiceLang);
+  }, [voiceLang]);
 
   function drawOverlay(canvas, video, landmarks) {
     const ctx = canvas.getContext("2d");
@@ -238,13 +242,31 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
 
   return (
     <div className="flex-1 flex flex-col">
-      <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-white shrink-0">
-        <p className="font-semibold text-gray-900 text-sm">{ex.name} · Live Tracking</p>
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-white shrink-0 gap-2">
+        <p className="font-semibold text-gray-900 text-sm truncate">{ex.name} · Live Tracking</p>
+        <div className="flex items-center gap-2 shrink-0">
           {voiceCoachRef.current.isSupported() && (
-            <button onClick={() => setVoiceOn((v) => !v)} className="text-gray-400" aria-label="Toggle voice coach">
-              {voiceOn ? <Volume2 size={18} /> : <VolumeX size={18} />}
-            </button>
+            <div className="flex items-center gap-0.5 bg-gray-100 rounded-full p-0.5">
+              <button
+                onClick={() => { setVoiceOn(true); setVoiceLang("en"); }}
+                className={`px-2 py-1 rounded-full text-[10px] font-semibold ${voiceOn && voiceLang === "en" ? "bg-white shadow-sm text-violet-700" : "text-gray-400"}`}
+              >
+                EN
+              </button>
+              <button
+                onClick={() => { setVoiceOn(true); setVoiceLang("hi"); }}
+                className={`px-2 py-1 rounded-full text-[10px] font-semibold ${voiceOn && voiceLang === "hi" ? "bg-white shadow-sm text-violet-700" : "text-gray-400"}`}
+              >
+                हिं
+              </button>
+              <button
+                onClick={() => setVoiceOn(false)}
+                className={`px-1.5 py-1 rounded-full ${!voiceOn ? "bg-white shadow-sm text-gray-700" : "text-gray-400"}`}
+                aria-label="Mute voice coach"
+              >
+                <VolumeX size={12} />
+              </button>
+            </div>
           )}
           <button onClick={onClose} className="text-gray-400"><X size={18} /></button>
         </div>
