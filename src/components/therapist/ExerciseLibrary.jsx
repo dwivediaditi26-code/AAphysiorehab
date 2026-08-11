@@ -1,18 +1,21 @@
 import React, { useState } from "react";
-import { Search, Filter, Dumbbell, Video, Plus, Upload, Play, X as XIcon } from "lucide-react";
+import { Search, Filter, Dumbbell, Video, Plus, Upload, Play, X as XIcon, Eye } from "lucide-react";
 import { Pill, PageHeader, Button } from "../ui/Atoms.jsx";
 import { Modal, Field, inputClass } from "../ui/Modal.jsx";
 import { REGIONS } from "../../data/seed.js";
 import { TRACKED_EXERCISE_COMPONENTS } from "../../lib/trackedExercises.js";
+import ExercisePreview from "./ExercisePreview.jsx";
 
 export function ExerciseLibraryView({ exercises, onAddExercise, onUpdateVideo }) {
   const [query, setQuery] = useState("");
   const [region, setRegion] = useState("All");
   const [videoTargetId, setVideoTargetId] = useState(null);
+  const [previewTargetId, setPreviewTargetId] = useState(null);
   const filtered = exercises.filter(
     (e) => (region === "All" || e.region === region) && e.name.toLowerCase().includes(query.toLowerCase())
   );
   const videoTarget = exercises.find((e) => e.id === videoTargetId);
+  const previewTarget = exercises.find((e) => e.id === previewTargetId);
 
   return (
     <div>
@@ -61,6 +64,12 @@ export function ExerciseLibraryView({ exercises, onAddExercise, onUpdateVideo })
             <p className="text-xs text-gray-400 mb-2">{ex.region} · {ex.difficulty}</p>
             <p className="text-xs text-gray-500 mb-1">{ex.sets} sets × {ex.reps} · rest {ex.rest}</p>
             {ex.frequency && <p className="text-xs text-gray-400 mb-3">{ex.frequency}</p>}
+            <button
+              onClick={() => setPreviewTargetId(ex.id)}
+              className="w-full flex items-center justify-center gap-1.5 text-xs font-medium text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-xl py-2 mb-2"
+            >
+              <Eye size={13} /> Preview as patient
+            </button>
             <div className="flex items-center gap-2 flex-wrap mt-2">
               {TRACKED_EXERCISE_COMPONENTS[ex.id] ? (
                 <Pill tone="violet"><span className="inline-flex items-center gap-1"><Video size={11} /> Live Tracking</span></Pill>
@@ -84,6 +93,10 @@ export function ExerciseLibraryView({ exercises, onAddExercise, onUpdateVideo })
         ))}
         {filtered.length === 0 && <p className="text-sm text-gray-400 col-span-full text-center py-10">No exercises match your filters</p>}
       </div>
+
+      {previewTarget && (
+        <ExercisePreview ex={previewTarget} onClose={() => setPreviewTargetId(null)} />
+      )}
 
       {videoTarget && (
         <AddVideoModal

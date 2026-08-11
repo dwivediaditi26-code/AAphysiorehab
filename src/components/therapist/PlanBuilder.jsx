@@ -1,10 +1,12 @@
 import React, { useState } from "react";
-import { Copy, Plus, X } from "lucide-react";
+import { Copy, Plus, X, Eye } from "lucide-react";
 import { generatePlan } from "../../lib/helpers.js";
 import { PROTOCOL_TEMPLATES } from "../../data/seed.js";
+import ExercisePreview from "./ExercisePreview.jsx";
 
 export default function PlanBuilder({ weeks, exercisesById, exercises, onChange, patientCondition }) {
   const [activeWeek, setActiveWeek] = useState(1);
+  const [previewTarget, setPreviewTarget] = useState(null); // { ex, prescribed }
   const [templateId, setTemplateId] = useState("");
   const [copyTarget, setCopyTarget] = useState("");
   const week = weeks.find((w) => w.week === activeWeek) || weeks[0];
@@ -128,9 +130,18 @@ export default function PlanBuilder({ weeks, exercisesById, exercises, onChange,
                     return (
                       <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-1.5">
                         <span className="text-xs text-gray-700 truncate">{ex.name} — {pe.sets} × {pe.reps}</span>
-                        <button onClick={() => removeExercise(d.day, i)} className="text-gray-300 hover:text-rose-500">
-                          <X size={13} />
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => setPreviewTarget({ ex, prescribed: { sets: pe.sets, reps: pe.reps } })}
+                            className="text-gray-300 hover:text-violet-600"
+                            title="Preview as patient"
+                          >
+                            <Eye size={13} />
+                          </button>
+                          <button onClick={() => removeExercise(d.day, i)} className="text-gray-300 hover:text-rose-500">
+                            <X size={13} />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -152,6 +163,14 @@ export default function PlanBuilder({ weeks, exercisesById, exercises, onChange,
         ))}
       </div>
       </div>
+
+      {previewTarget && (
+        <ExercisePreview
+          ex={previewTarget.ex}
+          prescribed={previewTarget.prescribed}
+          onClose={() => setPreviewTarget(null)}
+        />
+      )}
     </div>
   );
 }
