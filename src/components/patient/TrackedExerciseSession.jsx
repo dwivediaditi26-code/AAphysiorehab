@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
-import { X, Pause, Play, AlertTriangle } from "lucide-react";
+import { X, Pause, Play, AlertTriangle, Volume2, VolumeX } from "lucide-react";
 import { parseRepsTarget } from "../../lib/helpers.js";
 import { isWholeBodyInFrame } from "../../lib/trackingMath.js";
 import { FEEDBACK_MESSAGES as M } from "../../lib/feedbackMessages.js";
 import { TRACKER_CAMERA_ORIENTATION } from "../../lib/trackedExercises.js";
+import { createVoiceCoach } from "../../lib/voiceCoach.js";
 
 /**
  * Real camera + MediaPipe Pose Landmarker exercise-tracking screen. Generic —
@@ -65,6 +66,7 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
   const trackerRef = useRef(trackerFactory());
   const rafRef = useRef(null);
   const startRef = useRef(null);
+  const voiceCoachRef = useRef(createVoiceCoach());
   const orientation = TRACKER_CAMERA_ORIENTATION[ex.id] || "frontal";
   const setupTip = orientation === "side" ? M.cameraSetupTipSide : M.cameraSetupTipFrontal;
 
@@ -74,6 +76,7 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
   const [elapsed, setElapsed] = useState(0);
   const [feedback, setFeedback] = useState([]);
   const [framingOk, setFramingOk] = useState(true);
+  const [voiceOn, setVoiceOn] = useState(voiceCoachRef.current.isSupported());
 
   const targetReps = parseRepsTarget(prescribed ? prescribed.reps : ex.reps);
 
@@ -121,13 +124,22 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
             if (bodyVisible) {
               trackerRef.current.processFrame(landmarks, Date.now());
               const count = trackerRef.current.getRepCount();
+              const currentFeedback = trackerRef.current.getFeedback();
               setReps(count);
-              setFeedback(trackerRef.current.getFeedback());
+              setFeedback(currentFeedback);
               setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
+
+              const primary = currentFeedback[0];
+              if (primary && !primary.good) {
+                voiceCoachRef.current.speak(primary, primary.voiceEn);
+              }
+
               if (count >= targetReps) {
                 finish();
                 return;
               }
+            } else {
+              voiceCoachRef.current.speak(M.moveBackFullBody, "moveBack");
             }
           } else {
             setFramingOk(false);
@@ -143,9 +155,14 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
       cancelled = true;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
+      voiceCoachRef.current.reset();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running]);
+
+  useEffect(() => {
+    voiceCoachRef.current.setEnabled(voiceOn);
+  }, [voiceOn]);
 
   function drawOverlay(canvas, video, landmarks) {
     const ctx = canvas.getContext("2d");
@@ -197,7 +214,14 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
     <div className="flex-1 flex flex-col">
       <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-white shrink-0">
         <p className="font-semibold text-gray-900 text-sm">{ex.name} · Live Tracking</p>
-        <button onClick={onClose} className="text-gray-400"><X size={18} /></button>
+        <div className="flex items-center gap-3">
+          {voiceCoachRef.current.isSupported() && (
+            <button onClick={() => setVoiceOn((v) => !v)} className="text-gray-400" aria-label="Toggle voice coach">
+              {voiceOn ? <Volume2 size={18} /> : <VolumeX size={18} />}
+            </button>
+          )}
+          <button onClick={onClose} className="text-gray-400"><X size={18} /></button>
+        </div>
       </div>
 
       <div className="relative flex-1 bg-black">
