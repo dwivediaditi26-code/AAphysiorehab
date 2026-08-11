@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { X, Pause, Play, AlertTriangle, Volume2, VolumeX } from "lucide-react";
 import { parseRepsTarget } from "../../lib/helpers.js";
-import { isWholeBodyInFrame } from "../../lib/trackingMath.js";
+import { isWholeBodyInFrame, hasMinimalPose } from "../../lib/trackingMath.js";
 import { FEEDBACK_MESSAGES as M } from "../../lib/feedbackMessages.js";
 import { TRACKER_CAMERA_ORIENTATION } from "../../lib/trackedExercises.js";
 import { createVoiceCoach } from "../../lib/voiceCoach.js";
@@ -43,7 +43,7 @@ async function getLandmarker() {
         baseOptions: {
           modelAssetPath:
             "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-          delegate: "GPU",
+          delegate: "CPU",
         },
         runningMode: "VIDEO",
         numPoses: 1,
@@ -76,6 +76,7 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
   const [elapsed, setElapsed] = useState(0);
   const [feedback, setFeedback] = useState([]);
   const [framingOk, setFramingOk] = useState(true);
+  const [personVisible, setPersonVisible] = useState(true);
   const [voiceOn, setVoiceOn] = useState(voiceCoachRef.current.isSupported());
 
   const targetReps = parseRepsTarget(prescribed ? prescribed.reps : ex.reps);
@@ -107,21 +108,26 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
     }
 
     function loop(landmarker) {
+      let consecutiveErrors = 0;
       function frame() {
         if (cancelled) return;
         const video = videoRef.current;
         const canvas = canvasRef.current;
         if (video && canvas && video.readyState >= 2 && running) {
-          const now = performance.now();
-          const result = landmarker.detectForVideo(video, now);
-          const landmarks = result.landmarks && result.landmarks[0];
+          try {
+            const now = performance.now();
+            const result = landmarker.detectForVideo(video, now);
+            const landmarks = result.landmarks && result.landmarks[0];
+            consecutiveErrors = 0;
 
-          drawOverlay(canvas, video, landmarks);
+            drawOverlay(canvas, video, landmarks);
 
-          if (landmarks) {
-            const bodyVisible = isWholeBodyInFrame(landmarks);
-            setFramingOk(bodyVisible);
-            if (bodyVisible) {
+            const trackable = hasMinimalPose(landmarks);
+            const fullyFramed = isWholeBodyInFrame(landmarks);
+            setFramingOk(fullyFramed);
+            setPersonVisible(trackable);
+
+            if (trackable) {
               trackerRef.current.processFrame(landmarks, Date.now());
               const count = trackerRef.current.getRepCount();
               const currentFeedback = trackerRef.current.getFeedback();
@@ -129,9 +135,13 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
               setFeedback(currentFeedback);
               setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
 
-              const primary = currentFeedback[0];
-              if (primary && !primary.good) {
-                voiceCoachRef.current.speak(primary, primary.voiceEn);
+              if (!fullyFramed) {
+                voiceCoachRef.current.speak(M.moveBackFullBody, "moveBack");
+              } else {
+                const primary = currentFeedback[0];
+                if (primary && !primary.good) {
+                  voiceCoachRef.current.speak(primary, primary.voiceEn);
+                }
               }
 
               if (count >= targetReps) {
@@ -139,10 +149,14 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
                 return;
               }
             } else {
-              voiceCoachRef.current.speak(M.moveBackFullBody, "moveBack");
+              voiceCoachRef.current.speak(M.noPersonDetected, "noPerson");
             }
-          } else {
-            setFramingOk(false);
+          } catch (err) {
+            consecutiveErrors++;
+            if (consecutiveErrors > 30) { // roughly 1 second of continuous failures
+              setStatus("error");
+              return;
+            }
           }
         }
         rafRef.current = requestAnimationFrame(frame);
@@ -266,14 +280,21 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
           </div>
         )}
 
-        {status === "ready" && !framingOk && (
+        {status === "ready" && !personVisible && (
+          <div className="absolute bottom-3 left-3 right-3 bg-rose-600/90 text-white text-xs px-3 py-2 rounded-xl text-center">
+            <span className="block font-medium">{M.noPersonDetected.en}</span>
+            <span className="block" lang="hi">{M.noPersonDetected.hi}</span>
+          </div>
+        )}
+
+        {status === "ready" && personVisible && !framingOk && (
           <div className="absolute bottom-3 left-3 right-3 bg-amber-600/90 text-white text-xs px-3 py-2 rounded-xl text-center">
             <span className="block font-medium">{M.moveBackFullBody.en}</span>
             <span className="block" lang="hi">{M.moveBackFullBody.hi}</span>
           </div>
         )}
 
-        {status === "ready" && framingOk && feedback.length > 0 && (
+        {status === "ready" && personVisible && framingOk && feedback.length > 0 && (
           <div className="absolute bottom-3 left-3 right-3 bg-black/60 text-white text-xs px-3 py-2 rounded-xl text-center">
             <span className="block">{feedback[0].en}</span>
             <span className="block text-gray-300" lang="hi">{feedback[0].hi}</span>

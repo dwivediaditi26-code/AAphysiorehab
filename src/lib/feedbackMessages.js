@@ -79,6 +79,12 @@ export const FEEDBACK_MESSAGES = {
     voiceEn: "Move back",
     voiceHi: "पीछे हटें",
   },
+  noPersonDetected: {
+    en: "Can't see you — check your camera and lighting",
+    hi: "आप दिख नहीं रहे — कैमरा और रोशनी जांचें",
+    voiceEn: "Can't see you",
+    voiceHi: "आप दिख नहीं रहे",
+  },
   cameraSetupTipFrontal: {
     en: "Face the camera directly. Prop your phone so your head, hands, and feet are all in frame.",
     hi: "कैमरे के सामने सीधे खड़े हों। फ़ोन को इस तरह रखें कि सिर, हाथ और पैर — सभी फ्रेम में दिखें।",
