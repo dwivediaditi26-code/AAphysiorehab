@@ -1,6 +1,11 @@
 /**
- * Single Leg Bridge tracker. Same pattern as deadBugTracker.js: landmarks in,
- * phase state machine, rep count + feedback out.
+ * Single Leg Bridge tracker. Same pattern as deadBugTracker.js, built on the
+ * shared debounced rep counter (repCounter.js) for the phase/return
+ * detection — with an extra gate on top: the counter's "completed" signal
+ * only means "a genuine bridge happened", not "counts as single-leg". This
+ * tracker only increments its own rep tally when that completed bridge also
+ * passes the knee-asymmetry check, same logic as before, just layered on
+ * the shared debounce instead of duplicating it.
  *
  * Builds on the same hip-extension signal as gluteBridgeTracker.js, but only
  * counts a rep when one knee is meaningfully straighter than the other at the
@@ -13,28 +18,22 @@
  */
 import { norm, angleAt } from "./trackingMath.js";
 import { FEEDBACK_MESSAGES as M } from "./feedbackMessages.js";
+import { createRepCounter } from "./repCounter.js";
 
 export function createSingleLegBridgeTracker(config = {}) {
-  const ENTER = config.enter ?? 0.55;
-  const EXIT = config.exit ?? 0.25;
-  const MIN_PEAK = config.minPeak ?? 0.5;
   const SPEED_FLAG = config.speedFlag ?? 0.12;
   const ASYMMETRY_MIN = config.asymmetryMin ?? 25; // degrees between knees to count as "single leg"
   const ANGLE_LOW = config.angleLow ?? 110;
   const ANGLE_HIGH = config.angleHigh ?? 170;
 
+  const counter = createRepCounter({ enter: config.enter ?? 0.55, exit: config.exit ?? 0.25, minPeak: config.minPeak ?? 0.5 });
   const state = {
-    phase: "idle",
-    peak: 0,
-    reps: 0,
-    lastExt: 0,
-    maxDelta: 0,
-    activeLeg: null,
-    feedbackFlags: new Set(),
+    lastExt: 0, maxDelta: 0, reps: 0, activeLeg: null,
+    lastAsymmetryAtPeak: 0, feedbackFlags: new Set(),
   };
 
   return {
-    processFrame(landmarks) {
+    processFrame(landmarks, now = Date.now()) {
       if (!landmarks || landmarks.length < 29) return state;
       const LS = landmarks[11], RS = landmarks[12];
       const LH = landmarks[23], RH = landmarks[24];
@@ -49,30 +48,32 @@ export function createSingleLegBridgeTracker(config = {}) {
       const rightKneeAngle = angleAt(RH, RK, RA);
       const asymmetry = leftKneeAngle - rightKneeAngle;
 
-      const delta = Math.abs(ext - state.lastExt);
-      state.lastExt = ext;
-      if (delta > state.maxDelta) state.maxDelta = delta;
-
-      if (state.phase === "idle" && ext > ENTER) {
-        state.phase = "rising";
-        state.peak = ext;
-        state.maxDelta = 0;
-        state.activeLeg = asymmetry > 0 ? "A" : "B";
-      } else if (state.phase === "rising") {
-        if (ext > state.peak) state.peak = ext;
-        if (ext < EXIT) {
-          if (state.peak >= MIN_PEAK) {
-            if (Math.abs(asymmetry) < ASYMMETRY_MIN) {
-              state.feedbackFlags.add("bothLegsDown");
-            } else {
-              state.reps++;
-            }
-            if (state.maxDelta > SPEED_FLAG) state.feedbackFlags.add("speed");
-          }
-          state.phase = "idle";
-          state.peak = 0;
+      const wasActive = counter.isActive();
+      if (wasActive) {
+        const delta = Math.abs(ext - state.lastExt);
+        if (delta > state.maxDelta) state.maxDelta = delta;
+        if (ext > counter.getPeak() - 0.001) {
+          state.lastAsymmetryAtPeak = asymmetry;
+          state.activeLeg = asymmetry > 0 ? "A" : "B";
         }
       }
+      state.lastExt = ext;
+
+      const completed = counter.update(ext, now);
+      if (completed) {
+        if (Math.abs(state.lastAsymmetryAtPeak) < ASYMMETRY_MIN) {
+          state.feedbackFlags.add("bothLegsDown");
+        } else {
+          state.reps++;
+        }
+        if (state.maxDelta > SPEED_FLAG) state.feedbackFlags.add("speed");
+      }
+
+      if (!wasActive && counter.isActive()) {
+        state.feedbackFlags = new Set();
+        state.maxDelta = 0;
+      }
+
       return state;
     },
     getRepCount() { return state.reps; },
@@ -85,13 +86,9 @@ export function createSingleLegBridgeTracker(config = {}) {
       return out;
     },
     reset() {
-      state.phase = "idle";
-      state.peak = 0;
-      state.reps = 0;
-      state.lastExt = 0;
-      state.maxDelta = 0;
-      state.activeLeg = null;
-      state.feedbackFlags = new Set();
+      counter.reset();
+      state.lastExt = 0; state.maxDelta = 0; state.reps = 0;
+      state.activeLeg = null; state.lastAsymmetryAtPeak = 0; state.feedbackFlags = new Set();
     },
   };
 }

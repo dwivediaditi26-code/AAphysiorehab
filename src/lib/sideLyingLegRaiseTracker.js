@@ -1,5 +1,6 @@
 /**
- * Side-Lying Leg Raise tracker. Same pattern as deadBugTracker.js.
+ * Side-Lying Leg Raise tracker. Same pattern as deadBugTracker.js, built on
+ * the shared debounced rep counter (repCounter.js) — one instance per side.
  * Assumes side-lying on the mat, side-on camera — same physical camera
  * placement as the other floor exercises (to the side of the mat). An
  * upright, untilted camera reads real-world "up" as image "up" regardless
@@ -12,17 +13,14 @@
  */
 import { norm } from "./trackingMath.js";
 import { FEEDBACK_MESSAGES as M } from "./feedbackMessages.js";
+import { createRepCounter } from "./repCounter.js";
 
 export function createSideLyingLegRaiseTracker(config = {}) {
-  const ENTER = config.enter ?? 0.35;
-  const EXIT = config.exit ?? 0.18;
-  const MIN_PEAK = config.minPeak ?? 0.3;
   const SPEED_FLAG = config.speedFlag ?? 0.1;
+  const counterOpts = { enter: config.enter ?? 0.35, exit: config.exit ?? 0.18, minPeak: config.minPeak ?? 0.3 };
 
+  const counters = { A: createRepCounter(counterOpts), B: createRepCounter(counterOpts) };
   const state = {
-    phase: { A: "idle", B: "idle" },
-    peak: { A: 0, B: 0 },
-    reps: { A: 0, B: 0 },
     lastExt: { A: 0, B: 0 },
     maxDelta: { A: 0, B: 0 },
     baseline: null,
@@ -30,31 +28,28 @@ export function createSideLyingLegRaiseTracker(config = {}) {
     feedbackFlags: new Set(),
   };
 
-  function updatePair(key, ext, otherExt) {
-    const delta = Math.abs(ext - state.lastExt[key]);
+  function updateSide(key, ext, otherExt, now) {
+    const wasActive = counters[key].isActive();
+    if (wasActive) {
+      const delta = Math.abs(ext - state.lastExt[key]);
+      if (delta > state.maxDelta[key]) state.maxDelta[key] = delta;
+    }
     state.lastExt[key] = ext;
-    if (delta > state.maxDelta[key]) state.maxDelta[key] = delta;
 
-    if (state.phase[key] === "idle" && ext > ENTER) {
-      state.phase[key] = "rising";
-      state.peak[key] = ext;
+    const completed = counters[key].update(ext, now);
+    if (completed) {
+      if (state.maxDelta[key] > SPEED_FLAG) state.feedbackFlags.add("speed");
+      if (otherExt > 0.25) state.feedbackFlags.add("bottomLegMoving");
+    }
+
+    if (!wasActive && counters[key].isActive()) {
+      state.feedbackFlags = new Set();
       state.maxDelta[key] = 0;
-    } else if (state.phase[key] === "rising") {
-      if (ext > state.peak[key]) state.peak[key] = ext;
-      if (ext < EXIT) {
-        if (state.peak[key] >= MIN_PEAK) {
-          state.reps[key]++;
-          if (state.maxDelta[key] > SPEED_FLAG) state.feedbackFlags.add("speed");
-          if (otherExt > 0.25) state.feedbackFlags.add("bottomLegMoving");
-        }
-        state.phase[key] = "idle";
-        state.peak[key] = 0;
-      }
     }
   }
 
   return {
-    processFrame(landmarks) {
+    processFrame(landmarks, now = Date.now()) {
       if (!landmarks || landmarks.length < 29) return state;
       const LH = landmarks[23], RH = landmarks[24];
       const LA = landmarks[27], RA = landmarks[28];
@@ -70,15 +65,15 @@ export function createSideLyingLegRaiseTracker(config = {}) {
       const scale = Math.max(0.05, Math.abs(state.baseline.hipY - hipY) || 0.2);
       const extA = norm(state.baseline.left - leftAnkleY, 0, scale * 1.5);
       const extB = norm(state.baseline.right - rightAnkleY, 0, scale * 1.5);
-      updatePair("A", extA, extB);
-      updatePair("B", extB, extA);
+      updateSide("A", extA, extB, now);
+      updateSide("B", extB, extA, now);
 
       state.baseline.left = state.baseline.left * 0.99 + leftAnkleY * 0.01;
       state.baseline.right = state.baseline.right * 0.99 + rightAnkleY * 0.01;
 
       return state;
     },
-    getRepCount() { return state.reps.A + state.reps.B; },
+    getRepCount() { return counters.A.getRepCount() + counters.B.getRepCount(); },
     getFeedback() {
       const out = [];
       if (state.feedbackFlags.has("speed")) out.push(M.slowerRiseLower);
@@ -87,9 +82,7 @@ export function createSideLyingLegRaiseTracker(config = {}) {
       return out;
     },
     reset() {
-      state.phase = { A: "idle", B: "idle" };
-      state.peak = { A: 0, B: 0 };
-      state.reps = { A: 0, B: 0 };
+      counters.A.reset(); counters.B.reset();
       state.lastExt = { A: 0, B: 0 };
       state.maxDelta = { A: 0, B: 0 };
       state.baseline = null;

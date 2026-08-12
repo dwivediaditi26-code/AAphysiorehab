@@ -1,5 +1,6 @@
 /**
- * Shoulder Abduction tracker. Same pattern as deadBugTracker.js.
+ * Shoulder Abduction tracker. Same pattern as deadBugTracker.js, built on
+ * the shared debounced rep counter (repCounter.js).
  * Assumes FRONTAL camera (patient facing the camera) — abduction (raising
  * the arm out to the side) is a frontal-plane movement, so this is one of
  * the exercises that actually got MORE reliable when the setup moved from
@@ -11,18 +12,17 @@
  */
 import { norm } from "./trackingMath.js";
 import { FEEDBACK_MESSAGES as M } from "./feedbackMessages.js";
+import { createRepCounter } from "./repCounter.js";
 
 export function createShoulderAbductionTracker(config = {}) {
-  const ENTER = config.enter ?? 0.35;
-  const EXIT = config.exit ?? 0.18;
-  const MIN_PEAK = config.minPeak ?? 0.3;
   const SPEED_FLAG = config.speedFlag ?? 0.1;
   const LEVEL_FLAG = config.levelFlag ?? 0.15; // left/right arm-height mismatch, normalized
 
-  const state = { phase: "idle", peak: 0, reps: 0, lastExt: 0, maxDelta: 0, feedbackFlags: new Set() };
+  const counter = createRepCounter({ enter: config.enter ?? 0.35, exit: config.exit ?? 0.18, minPeak: config.minPeak ?? 0.3 });
+  const state = { lastExt: 0, maxDelta: 0, feedbackFlags: new Set() };
 
   return {
-    processFrame(landmarks) {
+    processFrame(landmarks, now = Date.now()) {
       if (!landmarks || landmarks.length < 29) return state;
       const LS = landmarks[11], RS = landmarks[12];
       const LW = landmarks[15], RW = landmarks[16];
@@ -32,32 +32,26 @@ export function createShoulderAbductionTracker(config = {}) {
       const rightAbduction = Math.abs(RW.x - RS.x);
       const ext = norm((leftAbduction + rightAbduction) / 2, shoulderWidth * 0.15, shoulderWidth * 1.3);
 
-      const delta = Math.abs(ext - state.lastExt);
-      state.lastExt = ext;
-      if (delta > state.maxDelta) state.maxDelta = delta;
-
-      if (state.phase === "idle" && ext > ENTER) {
-        state.phase = "raising";
-        state.peak = ext;
-        state.maxDelta = 0;
-      } else if (state.phase === "raising") {
-        if (ext > state.peak) {
-          state.peak = ext;
-          const heightDiff = Math.abs(LW.y - RW.y) / shoulderWidth;
-          if (heightDiff > LEVEL_FLAG) state.feedbackFlags.add("uneven");
-        }
-        if (ext < EXIT) {
-          if (state.peak >= MIN_PEAK) {
-            state.reps++;
-            if (state.maxDelta > SPEED_FLAG) state.feedbackFlags.add("speed");
-          }
-          state.phase = "idle";
-          state.peak = 0;
-        }
+      const wasActive = counter.isActive();
+      if (wasActive) {
+        const delta = Math.abs(ext - state.lastExt);
+        if (delta > state.maxDelta) state.maxDelta = delta;
+        const heightDiff = Math.abs(LW.y - RW.y) / shoulderWidth;
+        if (heightDiff > LEVEL_FLAG) state.feedbackFlags.add("uneven");
       }
+      state.lastExt = ext;
+
+      const completed = counter.update(ext, now);
+      if (completed && state.maxDelta > SPEED_FLAG) state.feedbackFlags.add("speed");
+
+      if (!wasActive && counter.isActive()) {
+        state.feedbackFlags = new Set();
+        state.maxDelta = 0;
+      }
+
       return state;
     },
-    getRepCount() { return state.reps; },
+    getRepCount() { return counter.getRepCount(); },
     getFeedback() {
       const out = [];
       if (state.feedbackFlags.has("speed")) out.push(M.slowerRiseLower);
@@ -66,12 +60,8 @@ export function createShoulderAbductionTracker(config = {}) {
       return out;
     },
     reset() {
-      state.phase = "idle";
-      state.peak = 0;
-      state.reps = 0;
-      state.lastExt = 0;
-      state.maxDelta = 0;
-      state.feedbackFlags = new Set();
+      counter.reset();
+      state.lastExt = 0; state.maxDelta = 0; state.feedbackFlags = new Set();
     },
   };
 }

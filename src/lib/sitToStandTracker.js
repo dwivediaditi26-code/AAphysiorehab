@@ -1,26 +1,25 @@
 /**
- * Sit-to-Stand tracker. Same pattern as deadBugTracker.js.
+ * Sit-to-Stand tracker. Same pattern as deadBugTracker.js, built on the
+ * shared debounced rep counter (repCounter.js).
  * Assumes seated on a chair, side-on camera. Signal: knee angle (hip-knee-
  * ankle) — bent while seated, near-straight when standing. Same underlying
- * angle as squatTracker.js but opposite rest state (seated, not standing),
- * so it needs its own polarity rather than sharing that file.
+ * angle as squatTracker.js but opposite rest state (seated, not standing).
  * Heuristic thresholds, not clinically validated — tune against real footage.
  */
 import { norm, angleAt } from "./trackingMath.js";
 import { FEEDBACK_MESSAGES as M } from "./feedbackMessages.js";
+import { createRepCounter } from "./repCounter.js";
 
 export function createSitToStandTracker(config = {}) {
-  const ENTER = config.enter ?? 0.55;
-  const EXIT = config.exit ?? 0.25;
-  const MIN_PEAK = config.minPeak ?? 0.5;
   const SPEED_FLAG = config.speedFlag ?? 0.12;
   const KNEE_LOW = config.kneeLow ?? 90;   // seated
   const KNEE_HIGH = config.kneeHigh ?? 170; // standing
 
-  const state = { phase: "idle", peak: 0, reps: 0, lastExt: 0, maxDelta: 0, feedbackFlags: new Set() };
+  const counter = createRepCounter({ enter: config.enter ?? 0.55, exit: config.exit ?? 0.25, minPeak: config.minPeak ?? 0.5 });
+  const state = { lastExt: 0, maxDelta: 0, feedbackFlags: new Set() };
 
   return {
-    processFrame(landmarks) {
+    processFrame(landmarks, now = Date.now()) {
       if (!landmarks || landmarks.length < 29) return state;
       const LH = landmarks[23], RH = landmarks[24];
       const LK = landmarks[25], RK = landmarks[26];
@@ -31,28 +30,24 @@ export function createSitToStandTracker(config = {}) {
       const kneeAngle = angleAt(hip, knee, ankle);
       const ext = norm(kneeAngle, KNEE_LOW, KNEE_HIGH); // 0 seated, 1 standing
 
-      const delta = Math.abs(ext - state.lastExt);
-      state.lastExt = ext;
-      if (delta > state.maxDelta) state.maxDelta = delta;
-
-      if (state.phase === "idle" && ext > ENTER) {
-        state.phase = "rising";
-        state.peak = ext;
-        state.maxDelta = 0;
-      } else if (state.phase === "rising") {
-        if (ext > state.peak) state.peak = ext;
-        if (ext < EXIT) {
-          if (state.peak >= MIN_PEAK) {
-            state.reps++;
-            if (state.maxDelta > SPEED_FLAG) state.feedbackFlags.add("speed");
-          }
-          state.phase = "idle";
-          state.peak = 0;
-        }
+      const wasActive = counter.isActive();
+      if (wasActive) {
+        const delta = Math.abs(ext - state.lastExt);
+        if (delta > state.maxDelta) state.maxDelta = delta;
       }
+      state.lastExt = ext;
+
+      const completed = counter.update(ext, now);
+      if (completed && state.maxDelta > SPEED_FLAG) state.feedbackFlags.add("speed");
+
+      if (!wasActive && counter.isActive()) {
+        state.feedbackFlags = new Set();
+        state.maxDelta = 0;
+      }
+
       return state;
     },
-    getRepCount() { return state.reps; },
+    getRepCount() { return counter.getRepCount(); },
     getFeedback() {
       const out = [];
       if (state.feedbackFlags.has("speed")) out.push(M.slowerRiseLower);
@@ -60,12 +55,8 @@ export function createSitToStandTracker(config = {}) {
       return out;
     },
     reset() {
-      state.phase = "idle";
-      state.peak = 0;
-      state.reps = 0;
-      state.lastExt = 0;
-      state.maxDelta = 0;
-      state.feedbackFlags = new Set();
+      counter.reset();
+      state.lastExt = 0; state.maxDelta = 0; state.feedbackFlags = new Set();
     },
   };
 }

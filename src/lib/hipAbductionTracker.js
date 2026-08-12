@@ -1,28 +1,26 @@
 /**
- * Standing Hip Abduction tracker. Same pattern as deadBugTracker.js.
+ * Standing Hip Abduction tracker. Same pattern as deadBugTracker.js, built
+ * on the shared debounced rep counter (repCounter.js) — one instance per
+ * side, since only one leg abducts at a time.
  * Assumes FRONTAL camera, standing — one leg lifts out to the side while the
  * other stays planted. Frontal-plane movement, so this only became a viable
  * candidate once the camera setup moved from side-view to frontal.
  * Signal: how far each ankle has moved sideways from a calibrated standing
  * baseline (feet start roughly hip-width apart, not at zero offset — hence
  * the baseline calibration, same idea as deadBugTracker's hip baseline),
- * normalized by leg length. Tracked as two independent sides (A/B), like
- * Bird Dog, since only one leg abducts at a time.
+ * normalized by leg length.
  * Heuristic thresholds, not clinically validated — tune against real footage.
  */
 import { norm, dist } from "./trackingMath.js";
 import { FEEDBACK_MESSAGES as M } from "./feedbackMessages.js";
+import { createRepCounter } from "./repCounter.js";
 
 export function createHipAbductionTracker(config = {}) {
-  const ENTER = config.enter ?? 0.35;
-  const EXIT = config.exit ?? 0.18;
-  const MIN_PEAK = config.minPeak ?? 0.3;
   const SPEED_FLAG = config.speedFlag ?? 0.1;
+  const counterOpts = { enter: config.enter ?? 0.35, exit: config.exit ?? 0.18, minPeak: config.minPeak ?? 0.3 };
 
+  const counters = { A: createRepCounter(counterOpts), B: createRepCounter(counterOpts) };
   const state = {
-    phase: { A: "idle", B: "idle" },
-    peak: { A: 0, B: 0 },
-    reps: { A: 0, B: 0 },
     lastExt: { A: 0, B: 0 },
     maxDelta: { A: 0, B: 0 },
     baseline: null,
@@ -30,31 +28,28 @@ export function createHipAbductionTracker(config = {}) {
     feedbackFlags: new Set(),
   };
 
-  function updatePair(key, ext, otherExt) {
-    const delta = Math.abs(ext - state.lastExt[key]);
+  function updateSide(key, ext, otherExt, now) {
+    const wasActive = counters[key].isActive();
+    if (wasActive) {
+      const delta = Math.abs(ext - state.lastExt[key]);
+      if (delta > state.maxDelta[key]) state.maxDelta[key] = delta;
+    }
     state.lastExt[key] = ext;
-    if (delta > state.maxDelta[key]) state.maxDelta[key] = delta;
 
-    if (state.phase[key] === "idle" && ext > ENTER) {
-      state.phase[key] = "raising";
-      state.peak[key] = ext;
+    const completed = counters[key].update(ext, now);
+    if (completed) {
+      if (state.maxDelta[key] > SPEED_FLAG) state.feedbackFlags.add("speed");
+      if (otherExt > 0.25) state.feedbackFlags.add("bothMoving");
+    }
+
+    if (!wasActive && counters[key].isActive()) {
+      state.feedbackFlags = new Set();
       state.maxDelta[key] = 0;
-    } else if (state.phase[key] === "raising") {
-      if (ext > state.peak[key]) state.peak[key] = ext;
-      if (ext < EXIT) {
-        if (state.peak[key] >= MIN_PEAK) {
-          state.reps[key]++;
-          if (state.maxDelta[key] > SPEED_FLAG) state.feedbackFlags.add("speed");
-          if (otherExt > 0.25) state.feedbackFlags.add("bothMoving");
-        }
-        state.phase[key] = "idle";
-        state.peak[key] = 0;
-      }
     }
   }
 
   return {
-    processFrame(landmarks) {
+    processFrame(landmarks, now = Date.now()) {
       if (!landmarks || landmarks.length < 29) return state;
       const LH = landmarks[23], RH = landmarks[24];
       const LA = landmarks[27], RA = landmarks[28];
@@ -71,15 +66,15 @@ export function createHipAbductionTracker(config = {}) {
 
       const extA = norm(leftOffset - state.baseline.left, 0, legLen * 0.4);
       const extB = norm(rightOffset - state.baseline.right, 0, legLen * 0.4);
-      updatePair("A", extA, extB);
-      updatePair("B", extB, extA);
+      updateSide("A", extA, extB, now);
+      updateSide("B", extB, extA, now);
 
       state.baseline.left = state.baseline.left * 0.99 + leftOffset * 0.01;
       state.baseline.right = state.baseline.right * 0.99 + rightOffset * 0.01;
 
       return state;
     },
-    getRepCount() { return state.reps.A + state.reps.B; },
+    getRepCount() { return counters.A.getRepCount() + counters.B.getRepCount(); },
     getFeedback() {
       const out = [];
       if (state.feedbackFlags.has("speed")) out.push(M.slowerRiseLower);
@@ -88,9 +83,7 @@ export function createHipAbductionTracker(config = {}) {
       return out;
     },
     reset() {
-      state.phase = { A: "idle", B: "idle" };
-      state.peak = { A: 0, B: 0 };
-      state.reps = { A: 0, B: 0 };
+      counters.A.reset(); counters.B.reset();
       state.lastExt = { A: 0, B: 0 };
       state.maxDelta = { A: 0, B: 0 };
       state.baseline = null;

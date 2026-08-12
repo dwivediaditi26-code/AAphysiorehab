@@ -75,7 +75,7 @@ test("Dead Bug (deadBugTracker.js)", () => {
       15: { y: lerp(shoulderY - 0.2, hipY, p) },           // left wrist: above shoulder -> at hip level
       28: { y: hipY + lerp(0, torsoLen * 0.9, p) },        // right ankle: at hip -> extended away
     });
-  }, 100);
+  }, 220);
 });
 
 // Glute Bridge: shoulder-hip-knee angle opens from bent (110°, rest) to
@@ -93,7 +93,7 @@ test("Glute Bridge (gluteBridgeTracker.js)", () => {
       23: hip, 24: hip,
       25: knee, 26: knee,
     });
-  }, 100);
+  }, 220);
 });
 
 // Bird Dog: left wrist reaches away from shoulder, right ankle reaches away
@@ -111,7 +111,7 @@ test("Bird Dog (birdDogTracker.js)", () => {
       15: { x: shoulder.x + reach, y: shoulder.y },
       28: { x: hip.x + reach, y: hip.y },
     });
-  }, 100);
+  }, 220);
 });
 
 // Single Leg Bridge: same hip-extension angle as Glute Bridge, plus one knee
@@ -136,7 +136,7 @@ test("Single Leg Bridge (singleLegBridgeTracker.js)", () => {
       25: leftKnee, 26: rightKnee,
       27: leftAnkle, 28: rightAnkle,
     });
-  }, 100);
+  }, 220);
 });
 
 // Squat: knee angle closes from standing (~170) to squat depth (~90) and back.
@@ -148,7 +148,7 @@ test("Squat (squatTracker.js)", () => {
     const hip = pointAt(knee, 260, 0.2);
     const ankle = pointAt(knee, 260 - angle, 0.2);
     return lm({ 11: { y: hip.y - 0.3 }, 12: { y: hip.y - 0.3 }, 23: hip, 24: hip, 25: knee, 26: knee, 27: ankle, 28: ankle });
-  }, 100);
+  }, 220);
 });
 
 // Sit-to-Stand: knee angle opens from seated (~90) to standing (~170).
@@ -160,7 +160,7 @@ test("Sit-to-Stand (sitToStandTracker.js)", () => {
     const hip = pointAt(knee, 260, 0.2);
     const ankle = pointAt(knee, 260 - angle, 0.2);
     return lm({ 23: hip, 24: hip, 25: knee, 26: knee, 27: ankle, 28: ankle });
-  }, 100);
+  }, 220);
 });
 
 // Heel Raises: toe-heel vertical gap grows as heels lift.
@@ -168,8 +168,8 @@ test("Heel Raises (heelRaiseTracker.js)", () => {
   const tracker = createHeelRaiseTracker();
   return runSequence(tracker, (t) => {
     const p = triangle(t);
-    return lm({ 29: { y: lerp(0.92, 0.78, p) }, 30: { y: lerp(0.92, 0.78, p) } });
-  }, 100);
+    return lm({ 29: { y: lerp(0.92, 0.86, p) }, 30: { y: lerp(0.92, 0.86, p) } });
+  }, 220);
 });
 
 // Shoulder Abduction: both wrists move outward from shoulders, then return.
@@ -181,7 +181,7 @@ test("Shoulder Abduction (shoulderAbductionTracker.js)", () => {
       15: { x: lerp(0.4, 0.1, p) },
       16: { x: lerp(0.6, 0.9, p) },
     });
-  }, 100);
+  }, 220);
 });
 
 // Standing Hip Abduction: right ankle moves away from hip midline after a
@@ -192,7 +192,7 @@ test("Standing Hip Abduction (hipAbductionTracker.js)", () => {
     if (t < 0.15) return lm(); // calibration frames at rest
     const p = triangle((t - 0.15) / 0.85);
     return lm({ 28: { x: lerp(0.58, 0.85, p) } });
-  }, 120);
+  }, 240);
 });
 
 // Superman: shoulders and ankles both rise off the floor together, after a
@@ -206,7 +206,7 @@ test("Superman (supermanTracker.js)", () => {
       11: { y: lerp(0.3, 0.15, p) }, 12: { y: lerp(0.3, 0.15, p) },
       27: { y: lerp(0.9, 0.75, p) }, 28: { y: lerp(0.9, 0.75, p) },
     });
-  }, 130);
+  }, 260);
 });
 
 // Prone Press-Up: shoulders rise, hips stay near baseline (unlike Superman).
@@ -216,7 +216,7 @@ test("Prone Press-Up (pronePressUpTracker.js)", () => {
     if (t < 0.12) return lm();
     const p = triangle((t - 0.12) / 0.88);
     return lm({ 11: { y: lerp(0.3, 0.1, p) }, 12: { y: lerp(0.3, 0.1, p) } });
-  }, 130);
+  }, 260);
 });
 
 // Side-Lying Leg Raise: left ankle lifts relative to its calibrated baseline
@@ -227,7 +227,7 @@ test("Side-Lying Leg Raise (sideLyingLegRaiseTracker.js)", () => {
     if (t < 0.15) return lm();
     const p = triangle((t - 0.15) / 0.85);
     return lm({ 27: { y: lerp(0.9, 0.65, p) } });
-  }, 130);
+  }, 260);
 });
 
 console.log("\n--- Tracker verification (synthetic movement, one clean rep) ---\n");
@@ -239,6 +239,34 @@ for (const r of results) {
 }
 console.log(`\n${allOk ? `All ${results.length} trackers counted at least 1 rep from a clean synthetic movement.` : "One or more trackers failed — see above."}\n`);
 let overallOk = allOk;
+
+// Direct regression test for the reported bug: a real rep with a brief noisy
+// dip toward EXIT mid-hold (simulating landmark jitter) should still count
+// as exactly 1 rep, not 2 — this is what EXIT_DEBOUNCE_FRAMES in
+// repCounter.js is specifically for.
+console.log("--- Jitter regression: one rep with a noisy mid-hold dip — expect exactly 1, not 2 ---\n");
+test("Glute Bridge with jitter (gluteBridgeTracker.js)", () => {
+  const tracker = createGluteBridgeTracker();
+  const hip = { x: 0.5, y: 0.5 };
+  const shoulder = pointAt(hip, 200, 0.25);
+  return runSequence(tracker, (t) => {
+    // Rise to peak (0 -> 0.3), hold with a brief noisy dip toward rest around
+    // the midpoint of the hold (0.3 -> 0.5), then finish the hold and return
+    // (0.5 -> 1.0). One continuous physical rep, not two.
+    let angle;
+    if (t < 0.3) angle = lerp(100, 175, t / 0.3);
+    else if (t < 0.35) angle = lerp(175, 112, (t - 0.3) / 0.05); // brief jitter dip, genuinely below EXIT (125°)
+    else if (t < 0.5) angle = lerp(112, 175, (t - 0.35) / 0.15); // recovers, still holding
+    else angle = lerp(175, 100, (t - 0.5) / 0.5); // real return
+    const knee = pointAt(hip, 200 - angle, 0.2);
+    return lm({ 11: shoulder, 12: shoulder, 23: hip, 24: hip, 25: knee, 26: knee });
+  }, 280);
+});
+const jitterResult = results[results.length - 1];
+const jitterOk = jitterResult.count === 1;
+console.log(`${jitterOk ? "PASS" : "FAIL"}  ${jitterResult.name}  →  reps counted: ${jitterResult.count} (expected exactly 1)`);
+console.log(`\n${jitterOk ? "Jitter did not cause a double-count." : "REGRESSION: jitter caused a double-count."}\n`);
+overallOk = overallOk && jitterOk;
 
 // Negative control: static pose, zero movement — every tracker should report 0.
 console.log("--- Negative control: static pose (no movement) — expect 0 reps for all ---\n");
