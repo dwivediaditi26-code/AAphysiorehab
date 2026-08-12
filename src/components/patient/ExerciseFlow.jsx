@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { ArrowLeft, Video, Play, X, RotateCcw, Check, Smartphone } from "lucide-react";
+import { ArrowLeft, Video, Play, X, RotateCcw, Check, Smartphone, Timer } from "lucide-react";
 import { Pill } from "../ui/Atoms.jsx";
 import { getInstructions } from "../../data/seed.js";
-import { TRACKED_EXERCISE_COMPONENTS, TRACKER_CAMERA_ORIENTATION } from "../../lib/trackedExercises.js";
+import { TRACKED_EXERCISE_COMPONENTS, HOLD_TRACKED_EXERCISES, TRACKER_CAMERA_ORIENTATION } from "../../lib/trackedExercises.js";
 import { FEEDBACK_MESSAGES as M } from "../../lib/feedbackMessages.js";
 import { unlockSpeechSynthesis } from "../../lib/voiceCoach.js";
 
-export { TRACKED_EXERCISE_COMPONENTS };
+export { TRACKED_EXERCISE_COMPONENTS, HOLD_TRACKED_EXERCISES };
 
 export function PatientExerciseDetail({ ex, prescribed, onBack, onStart }) {
   const isTracked = !!TRACKED_EXERCISE_COMPONENTS[ex.id];
+  const isHoldTracked = !!HOLD_TRACKED_EXERCISES[ex.id];
   const orientation = TRACKER_CAMERA_ORIENTATION[ex.id];
   const setupTip = orientation === "side" ? M.cameraSetupTipSide : M.cameraSetupTipFrontal;
   return (
@@ -18,6 +19,7 @@ export function PatientExerciseDetail({ ex, prescribed, onBack, onStart }) {
         <button onClick={onBack} className="text-gray-400"><ArrowLeft size={18} /></button>
         <p className="font-semibold text-gray-900 text-sm flex-1">{ex.name}</p>
         {isTracked && <Pill tone="violet"><span className="inline-flex items-center gap-1"><Video size={11} /> Live Tracking</span></Pill>}
+        {isHoldTracked && <Pill tone="violet"><span className="inline-flex items-center gap-1"><Timer size={11} /> Live Hold Tracking</span></Pill>}
       </div>
       <div className="p-5 flex-1 overflow-y-auto">
         {ex.videoUrl ? (
@@ -34,7 +36,7 @@ export function PatientExerciseDetail({ ex, prescribed, onBack, onStart }) {
             </div>
           </div>
         )}
-        {isTracked && (
+        {(isTracked || isHoldTracked) && (
           <div className="flex items-start gap-2 bg-violet-50 rounded-xl p-3 mb-5">
             <Smartphone size={15} className="text-violet-500 mt-0.5 shrink-0" />
             <div>

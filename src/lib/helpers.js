@@ -45,3 +45,20 @@ export function parseRepsTarget(repsStr) {
   const n = match ? parseInt(match[0], 10) : 8;
   return /each side/i.test(String(repsStr)) ? n * 2 : n;
 }
+
+/** Extracts a hold duration in milliseconds from strings like "20 sec hold"
+ * or "30 sec hold each side". "Each side" doesn't double the duration here
+ * (unlike parseRepsTarget) — each side gets its own full-length hold, not a
+ * combined target. */
+export function parseHoldTargetMs(repsStr) {
+  const match = String(repsStr).match(/(\d+)\s*sec/i);
+  const seconds = match ? parseInt(match[1], 10) : 20;
+  return seconds * 1000;
+}
+
+/** True when the reps text describes a hold ("X sec hold") rather than a
+ * rep count — drives whether the patient flow renders a hold-timer session
+ * or a rep-counter session for a given exercise. */
+export function isHoldExercise(repsStr) {
+  return /hold/i.test(String(repsStr));
+}

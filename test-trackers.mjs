@@ -13,6 +13,9 @@ import { createHipAbductionTracker } from "./src/lib/hipAbductionTracker.js";
 import { createSupermanTracker } from "./src/lib/supermanTracker.js";
 import { createPronePressUpTracker } from "./src/lib/pronePressUpTracker.js";
 import { createSideLyingLegRaiseTracker } from "./src/lib/sideLyingLegRaiseTracker.js";
+import { createSidePlankTracker } from "./src/lib/sidePlankTracker.js";
+import { createFrontPlankTracker } from "./src/lib/frontPlankTracker.js";
+import { createAdductorSqueezeTracker } from "./src/lib/adductorSqueezeTracker.js";
 
 function lm(overrides = {}) {
   // 33 default landmarks in a neutral standing/lying pose, all high visibility.
@@ -294,4 +297,58 @@ for (const [name, factory] of staticTests) {
 }
 console.log(`\n${staticOk ? "No false reps counted from a static pose." : "One or more trackers counted reps with zero movement — false positive."}\n`);
 overallOk = overallOk && staticOk;
+
+// Hold-tracker verification: a different engine (holdCounter.js), a
+// different failure mode to check for. Uses a short test targetMs (500ms)
+// rather than each exercise's real target (10-20s) so the simulated
+// timeline doesn't need thousands of frames — the engine's logic doesn't
+// care what the target duration actually is.
+console.log("--- Hold trackers: successful hold (stay in position past target) — expect 1 completed hold ---\n");
+const holdTests = [
+  ["Side Plank", createSidePlankTracker, (p) => lm({ 23: { y: lerp(0.6, 0.62 - p * 0.15, 1) }, 24: { y: lerp(0.6, 0.62 - p * 0.15, 1) } })],
+  ["Front Plank", createFrontPlankTracker, (p) => lm({ 23: { y: 0.6 - p * 0.15 }, 24: { y: 0.6 - p * 0.15 } })],
+  ["Adductor Squeeze", createAdductorSqueezeTracker, (p) => lm({ 25: { x: 0.42 + p * 0.08 }, 26: { x: 0.58 - p * 0.08 } })],
+];
+
+function runHoldSequence(tracker, poseAtProgress, frames, holdFromFrame) {
+  for (let i = 0; i < frames; i++) {
+    const now = Date.now() + i * 16;
+    const inPosition = i >= holdFromFrame;
+    tracker.processFrame(poseAtProgress(inPosition ? 1 : 0), now);
+  }
+  return tracker.getCompletedHolds();
+}
+
+let holdOk = true;
+for (const [name, factory, poseAtProgress] of holdTests) {
+  const tracker = factory({ targetMs: 500 });
+  // 15 calibration frames at rest, then hold the "in position" pose for
+  // 60 frames (~960ms of simulated time — comfortably past the 500ms target).
+  const count = runHoldSequence(tracker, poseAtProgress, 75, 15);
+  const ok = count === 1;
+  if (!ok) holdOk = false;
+  console.log(`${ok ? "PASS" : "FAIL"}  ${name}  →  completed holds: ${count} (expected 1)`);
+}
+console.log(`\n${holdOk ? "All hold trackers completed a genuine sustained hold." : "One or more hold trackers failed — see above."}\n`);
+overallOk = overallOk && holdOk;
+
+console.log("--- Hold trackers: broken early (drop out before target) — expect 0 completed holds ---\n");
+let breakOk = true;
+for (const [name, factory, poseAtProgress] of holdTests) {
+  const tracker = factory({ targetMs: 500 });
+  // Calibrate, hold briefly (200ms — under the 500ms target), then drop back
+  // to rest for the remainder. Should never complete.
+  for (let i = 0; i < 90; i++) {
+    const now = Date.now() + i * 16;
+    const inPosition = i >= 15 && i < 28; // ~13 frames in position, ~208ms — short of target
+    tracker.processFrame(poseAtProgress(inPosition ? 1 : 0), now);
+  }
+  const count = tracker.getCompletedHolds();
+  const ok = count === 0;
+  if (!ok) breakOk = false;
+  console.log(`${ok ? "PASS" : "FAIL"}  ${name}  →  completed holds: ${count} (expected 0 — broke before target)`);
+}
+console.log(`\n${breakOk ? "Breaking position early correctly did not count as a completed hold." : "REGRESSION: a broken hold still counted."}\n`);
+overallOk = overallOk && breakOk;
+
 process.exit(overallOk ? 0 : 1);

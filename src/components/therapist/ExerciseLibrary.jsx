@@ -3,7 +3,7 @@ import { Search, Filter, Dumbbell, Video, Plus, Upload, Play, X as XIcon, Eye, P
 import { Pill, PageHeader, Button } from "../ui/Atoms.jsx";
 import { Modal, Field, inputClass } from "../ui/Modal.jsx";
 import { REGIONS } from "../../data/seed.js";
-import { TRACKED_EXERCISE_COMPONENTS } from "../../lib/trackedExercises.js";
+import { TRACKED_EXERCISE_COMPONENTS, HOLD_TRACKED_EXERCISES } from "../../lib/trackedExercises.js";
 import ExercisePreview from "./ExercisePreview.jsx";
 
 export function ExerciseLibraryView({ exercises, onAddExercise, onEditExercise, onUpdateVideo }) {
@@ -84,6 +84,8 @@ export function ExerciseLibraryView({ exercises, onAddExercise, onEditExercise, 
             <div className="flex items-center gap-2 flex-wrap mt-2">
               {TRACKED_EXERCISE_COMPONENTS[ex.id] ? (
                 <Pill tone="violet"><span className="inline-flex items-center gap-1"><Video size={11} /> Live Tracking</span></Pill>
+              ) : HOLD_TRACKED_EXERCISES[ex.id] ? (
+                <Pill tone="violet"><span className="inline-flex items-center gap-1"><Video size={11} /> Live Hold Tracking</span></Pill>
               ) : ex.tracking ? (
                 <Pill tone="amber">Trackable — no engine yet</Pill>
               ) : (

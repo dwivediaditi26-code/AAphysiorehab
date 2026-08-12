@@ -4,8 +4,10 @@ import {
   PatientExerciseSession,
   PatientSessionComplete,
   TRACKED_EXERCISE_COMPONENTS,
+  HOLD_TRACKED_EXERCISES,
 } from "../patient/ExerciseFlow.jsx";
 import TrackedExerciseSession from "../patient/TrackedExerciseSession.jsx";
+import HoldTrackedExerciseSession from "../patient/HoldTrackedExerciseSession.jsx";
 
 /**
  * Reuses the exact same patient-facing components (ExerciseFlow.jsx,
@@ -42,6 +44,7 @@ export default function ExercisePreview({ ex, prescribed = null, onClose }) {
   }
 
   const trackerFactory = TRACKED_EXERCISE_COMPONENTS[ex.id];
+  const holdTrackerFactory = HOLD_TRACKED_EXERCISES[ex.id];
 
   return (
     <div
@@ -58,9 +61,11 @@ export default function ExercisePreview({ ex, prescribed = null, onClose }) {
         )}
 
         {stage === "session" && (
-          trackerFactory
-            ? <TrackedExerciseSession ex={ex} prescribed={prescribed} trackerFactory={trackerFactory} onClose={onClose} onFinish={finish} />
-            : <PatientExerciseSession ex={ex} prescribed={prescribed} onClose={onClose} onFinish={finish} />
+          holdTrackerFactory
+            ? <HoldTrackedExerciseSession ex={ex} prescribed={prescribed} trackerFactory={holdTrackerFactory} onClose={onClose} onFinish={finish} />
+            : trackerFactory
+              ? <TrackedExerciseSession ex={ex} prescribed={prescribed} trackerFactory={trackerFactory} onClose={onClose} onFinish={finish} />
+              : <PatientExerciseSession ex={ex} prescribed={prescribed} onClose={onClose} onFinish={finish} />
         )}
 
         {stage === "complete" && result && (

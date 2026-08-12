@@ -209,4 +209,23 @@ export const FEEDBACK_MESSAGES = {
     voiceEn: "Good",
     voiceHi: "बढ़िया",
   },
+  goodHold: {
+    good: true,
+    en: "Good hold, steady position",
+    hi: "अच्छी पकड़, स्थिर स्थिति",
+    voiceEn: "Good hold",
+    voiceHi: "अच्छी पकड़",
+  },
+  holdBroke: {
+    en: "Position broke before time was up — reset and try again",
+    hi: "समय पूरा होने से पहले स्थिति टूट गई — फिर से कोशिश करें",
+    voiceEn: "Hold again",
+    voiceHi: "फिर से रोकें",
+  },
+  keepHipsUpPlank: {
+    en: "Keep your hips up, avoid sagging",
+    hi: "कूल्हों को ऊपर रखें, झुकने न दें",
+    voiceEn: "Hips up",
+    voiceHi: "कूल्हे ऊपर",
+  },
 };

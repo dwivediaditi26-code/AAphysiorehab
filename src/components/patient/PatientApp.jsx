@@ -1,18 +1,36 @@
 import React, { useState } from "react";
-import { Dumbbell, Check, Home, ClipboardList, TrendingUp, User, Send, LogOut } from "lucide-react";
+import { Dumbbell, Check, Home, ClipboardList, TrendingUp, User, Send, LogOut, Bell } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Pill, CircularStat } from "../ui/Atoms.jsx";
 import { initials } from "../../lib/helpers.js";
-import { PatientExerciseDetail, PatientExerciseSession, PatientSessionComplete, TRACKED_EXERCISE_COMPONENTS } from "./ExerciseFlow.jsx";
+import { PatientExerciseDetail, PatientExerciseSession, PatientSessionComplete, TRACKED_EXERCISE_COMPONENTS, HOLD_TRACKED_EXERCISES } from "./ExerciseFlow.jsx";
 import TrackedExerciseSession from "./TrackedExerciseSession.jsx";
+import HoldTrackedExerciseSession from "./HoldTrackedExerciseSession.jsx";
 
-function PatientHome({ patient, day, todaysExercises, exercisesById, completedToday, onOpenExercise }) {
+function PatientHome({ patient, day, todaysExercises, exercisesById, completedToday, remindersEnabled, onOpenExercise }) {
   const doneCount = todaysExercises.filter((pe) => completedToday[pe.exerciseId]).length;
+  // In-app only — this shows when the patient opens the app, it does not
+  // reach them while the app is closed. A real push notification needs a
+  // backend to schedule and deliver it, which doesn't exist yet.
+  const showReminder = remindersEnabled && day && !day.isRest && todaysExercises.length > 0
+    && doneCount < todaysExercises.length && new Date().getHours() >= 16;
+
   return (
     <div className="p-5">
       <p className="text-sm text-gray-400">Good Morning,</p>
       <h1 className="text-xl font-semibold text-gray-900 mb-1">{patient.name.split(" ")[0]} 👋</h1>
       <p className="text-xs text-gray-400 mb-5">Week {patient.week} • Day {patient.day}</p>
+
+      {showReminder && (
+        <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-100 rounded-2xl p-4 mb-5">
+          <Bell size={16} className="text-amber-500 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-gray-900">{todaysExercises.length - doneCount} exercise{todaysExercises.length - doneCount > 1 ? "s" : ""} left today</p>
+            <p className="text-xs text-gray-500">Don't lose your streak — finish before the day's out</p>
+          </div>
+        </div>
+      )}
+
       <p className="text-sm font-semibold text-gray-900 mb-3">Today's Exercises</p>
 
       {!day || day.isRest ? (
@@ -203,7 +221,7 @@ const PATIENT_TABS = [
   { key: "profile", label: "Profile", icon: User },
 ];
 
-export default function PatientApp({ patient, weeks, exercisesById, therapistName, thread, onSendMessage, onLogout }) {
+export default function PatientApp({ patient, weeks, exercisesById, therapistName, thread, onSendMessage, remindersEnabled, onLogout }) {
   const [tab, setTab] = useState("home");
   const [flow, setFlow] = useState(null);
   const [completedToday, setCompletedToday] = useState({});
@@ -226,9 +244,14 @@ export default function PatientApp({ patient, weeks, exercisesById, therapistNam
     if (flow.stage === "detail") flowScreen = <PatientExerciseDetail ex={ex} prescribed={prescribed} onBack={() => setFlow(null)} onStart={() => setFlow({ stage: "session", exerciseId: flow.exerciseId })} />;
     if (flow.stage === "session") {
       const trackerFactory = TRACKED_EXERCISE_COMPONENTS[ex.id];
-      flowScreen = trackerFactory
-        ? <TrackedExerciseSession ex={ex} prescribed={prescribed} trackerFactory={trackerFactory} onClose={() => setFlow(null)} onFinish={(result) => finishSession(flow.exerciseId, result)} />
-        : <PatientExerciseSession ex={ex} prescribed={prescribed} onClose={() => setFlow(null)} onFinish={(result) => finishSession(flow.exerciseId, result)} />;
+      const holdTrackerFactory = HOLD_TRACKED_EXERCISES[ex.id];
+      if (holdTrackerFactory) {
+        flowScreen = <HoldTrackedExerciseSession ex={ex} prescribed={prescribed} trackerFactory={holdTrackerFactory} onClose={() => setFlow(null)} onFinish={(result) => finishSession(flow.exerciseId, result)} />;
+      } else {
+        flowScreen = trackerFactory
+          ? <TrackedExerciseSession ex={ex} prescribed={prescribed} trackerFactory={trackerFactory} onClose={() => setFlow(null)} onFinish={(result) => finishSession(flow.exerciseId, result)} />
+          : <PatientExerciseSession ex={ex} prescribed={prescribed} onClose={() => setFlow(null)} onFinish={(result) => finishSession(flow.exerciseId, result)} />;
+      }
     }
     if (flow.stage === "complete") flowScreen = <PatientSessionComplete ex={ex} result={flow.result} onContinue={() => setFlow(null)} />;
   }
@@ -239,7 +262,7 @@ export default function PatientApp({ patient, weeks, exercisesById, therapistNam
         {flowScreen || (
           <>
             <div className="flex-1 overflow-y-auto">
-              {tab === "home" && <PatientHome patient={patient} day={day} todaysExercises={todaysExercises} exercisesById={exercisesById} completedToday={completedToday} onOpenExercise={(id) => setFlow({ stage: "detail", exerciseId: id })} />}
+              {tab === "home" && <PatientHome patient={patient} day={day} todaysExercises={todaysExercises} exercisesById={exercisesById} completedToday={completedToday} remindersEnabled={remindersEnabled} onOpenExercise={(id) => setFlow({ stage: "detail", exerciseId: id })} />}
               {tab === "plan" && <PatientPlanTab weeks={weeks} patient={patient} exercisesById={exercisesById} />}
               {tab === "progress" && <PatientProgressTab patient={patient} weeks={weeks} sessionLog={sessionLog} exercisesById={exercisesById} />}
               {tab === "profile" && <PatientProfileTab patient={patient} therapistName={therapistName} thread={thread} onSend={onSendMessage} onLogout={onLogout} />}

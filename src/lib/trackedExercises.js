@@ -27,6 +27,9 @@ import { createHipAbductionTracker } from "./hipAbductionTracker.js";
 import { createSupermanTracker } from "./supermanTracker.js";
 import { createPronePressUpTracker } from "./pronePressUpTracker.js";
 import { createSideLyingLegRaiseTracker } from "./sideLyingLegRaiseTracker.js";
+import { createSidePlankTracker } from "./sidePlankTracker.js";
+import { createFrontPlankTracker } from "./frontPlankTracker.js";
+import { createAdductorSqueezeTracker } from "./adductorSqueezeTracker.js";
 
 export const TRACKED_EXERCISE_COMPONENTS = {
   e4: createDeadBugTracker,             // Dead Bug — lying down, side view
@@ -41,6 +44,21 @@ export const TRACKED_EXERCISE_COMPONENTS = {
   e22: createSupermanTracker,           // Superman — prone, side view
   e27: createPronePressUpTracker,       // Prone Press-Up — prone, side view
   e19: createSideLyingLegRaiseTracker,  // Side-Lying Leg Raise — side-lying, side view
+};
+
+// Hold-based exercises — a separate registry from the rep-based one above,
+// since they need a fundamentally different engine (holdCounter.js: a timer
+// gated on staying in position, not a rep-counting phase machine) and a
+// different UI (a progress ring toward a target duration, not a rep count).
+// Only 3 of the 7 hold-based exercises in the library are built so far
+// (Side Plank, Front Plank, Adductor Squeeze) — Hamstring Stretch,
+// Piriformis Stretch, Knee-to-Chest, and Child's Pose follow the same
+// pattern and are natural next additions, not skipped for a real reason
+// the way e.g. Slump Neural Slide was.
+export const HOLD_TRACKED_EXERCISES = {
+  e6: createSidePlankTracker,      // Side Plank — side-lying, side view
+  e23: createFrontPlankTracker,    // Front Plank — prone, side view
+  e20: createAdductorSqueezeTracker, // Adductor Squeeze — lying down, side view
 };
 
 // Which camera orientation each tracked exercise expects — drives the
@@ -59,4 +77,7 @@ export const TRACKER_CAMERA_ORIENTATION = {
   e22: "side",
   e27: "side",
   e19: "side",
+  e6: "side",
+  e23: "side",
+  e20: "side",
 };

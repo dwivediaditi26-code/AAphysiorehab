@@ -38,6 +38,8 @@ export default function PhysioRehabApp() {
   const [exercises, setExercises] = useState(EXERCISES_SEED);
   const [messages, setMessages] = useState(MESSAGES_SEED);
   const [appointments, setAppointments] = useState(APPOINTMENTS_SEED);
+  const [missedSessionAlerts, setMissedSessionAlerts] = useState(true);
+  const [remindersEnabled, setRemindersEnabled] = useState(true);
   const exercisesById = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
 
   const initialPlans = useMemo(() => {
@@ -156,6 +158,7 @@ export default function PhysioRehabApp() {
         therapistName={patientTherapist.name}
         thread={messages[loginPatient.id] || []}
         onSendMessage={(text) => sendMessage(loginPatient.id, text, "patient")}
+        remindersEnabled={remindersEnabled}
         onLogout={() => { setRole(null); setLoginPatientId(null); }}
       />
     );
@@ -228,7 +231,14 @@ export default function PhysioRehabApp() {
 
         {view === "progress" && <ProgressView patients={visiblePatients} onOpenPatient={openPatient} scope={patientScope} setScope={setPatientScope} />}
 
-        {view === "settings" && <SettingsView />}
+        {view === "settings" && (
+          <SettingsView
+            missedSessionAlerts={missedSessionAlerts}
+            onToggleMissedSessionAlerts={() => setMissedSessionAlerts((v) => !v)}
+            remindersEnabled={remindersEnabled}
+            onToggleReminders={() => setRemindersEnabled((v) => !v)}
+          />
+        )}
       </div>
 
       {showAddPatient && <AddPatientModal onClose={() => setShowAddPatient(false)} onAdd={addPatient} />}
