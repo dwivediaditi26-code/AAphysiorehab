@@ -54,6 +54,18 @@ export const FEEDBACK_MESSAGES = {
     voiceEn: "Good",
     voiceHi: "बढ़िया",
   },
+  liftHipsHigher: {
+    en: "Lift your hips a little higher",
+    hi: "कूल्हों को थोड़ा और ऊपर उठाएं",
+    voiceEn: "Lift higher",
+    voiceHi: "थोड़ा ऊपर",
+  },
+  keepHipsUp: {
+    en: "Keep your hips up — don't let them drop mid-lift",
+    hi: "कूल्हों को ऊपर रखें — बीच में नीचे न गिरने दें",
+    voiceEn: "Hips up",
+    voiceHi: "कूल्हे ऊपर",
+  },
   noRocking: {
     en: "Keep your hips level, avoid rocking side to side",
     hi: "कूल्हों को समतल रखें, इधर-उधर न हिलें",
@@ -74,10 +86,34 @@ export const FEEDBACK_MESSAGES = {
     voiceHi: "बढ़िया",
   },
   moveBackFullBody: {
-    en: "Move back — make sure your whole body is visible",
-    hi: "पीछे हटें — सुनिश्चित करें कि आपका पूरा शरीर दिख रहा हो",
+    en: "Part of your body is out of frame — move your phone back",
+    hi: "आपके शरीर का हिस्सा फ्रेम से बाहर है — फ़ोन को पीछे करें",
     voiceEn: "Move back",
     voiceHi: "पीछे हटें",
+  },
+  moveCloser: {
+    en: "Move a little closer so the camera sees you clearly",
+    hi: "थोड़ा पास आएं ताकि कैमरा आपको साफ़ देख सके",
+    voiceEn: "Move closer",
+    voiceHi: "थोड़ा पास आएं",
+  },
+  lowConfidence: {
+    en: "Camera can't see your body clearly — add light, use a plain floor, avoid loose clothing",
+    hi: "कैमरा आपका शरीर साफ़ नहीं देख पा रहा — रोशनी बढ़ाएं, सादा फ़र्श रखें, ढीले कपड़े न पहनें",
+    voiceEn: "Add more light",
+    voiceHi: "रोशनी बढ़ाएं",
+  },
+  getInPosition: {
+    en: "Get in position — the count starts when the camera sees you clearly",
+    hi: "सही स्थिति में आएं — कैमरा साफ़ देखते ही गिनती शुरू होगी",
+    voiceEn: "Get in position",
+    voiceHi: "सही स्थिति में आएं",
+  },
+  holdStill: {
+    en: "Hold still for a second…",
+    hi: "एक पल स्थिर रहें…",
+    voiceEn: "Hold still",
+    voiceHi: "स्थिर रहें",
   },
   noPersonDetected: {
     en: "Can't see you — check your camera and lighting",

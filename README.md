@@ -87,3 +87,30 @@ git push -u origin main
 
 Camera tracking (`getUserMedia`) requires HTTPS or `localhost` — Vercel's
 default `*.vercel.app` domain covers this automatically.
+
+
+## Live tracking reliability
+
+Camera tracking runs every landmark through `src/lib/poseQuality.js` and
+`landmarkSmoother.js` before any tracker sees it:
+
+- **Smoothing + glitch guard**: One Euro filter. A joint MediaPipe can't see
+  (low visibility) is frozen, not trusted. Single-frame teleports are held.
+- **Framing check**: judges whether the *near-side* body chain is inside the
+  frame, not the raw visibility score (which is always low for the hidden far
+  side in a side view). Reports cut off / too small / low confidence
+  separately, debounced (~1.5 s) and voice-capped (3 prompts).
+- **Armed latch**: reps only count once the setup has been good for a moment.
+- **Bridging** (`gluteBridgeTracker.js`, `singleLegBridgeTracker.js`) uses
+  `hipExtensionSignal.js`: near-side chain, aspect-corrected angle, median
+  filter, per-patient resting baseline. Cues: slower, lift higher, hips
+  sagged. Deliberately no cue for what a camera can't measure: core/glute
+  engagement, over-arching, left/right hip level from a side view.
+- Model: Pose Landmarker **Full**, WASM pinned to the installed package version
+  (`src/lib/landmarker.js`: keep `TASKS_VISION_VERSION` equal to
+  `package-lock.json`), GPU delegate with CPU fallback.
+
+`npm test` runs the synthetic tracker suite plus `test-bridge-reliability.mjs`,
+which replays **real** MediaPipe landmarks (`test-fixtures/`). Thresholds are a
+draft from one studio clip. Add your own patients' footage (correct AND
+wrong-form reps) to `test-fixtures/` before trusting a cue clinically.

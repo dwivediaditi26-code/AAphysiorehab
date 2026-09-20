@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { X, Pause, Play, AlertTriangle, VolumeX } from "lucide-react";
 import { parseRepsTarget } from "../../lib/helpers.js";
-import { isWholeBodyInFrame, hasMinimalPose } from "../../lib/trackingMath.js";
+import { createPoseQuality } from "../../lib/poseQuality.js";
+import { getLandmarker } from "../../lib/landmarker.js";
 import { FEEDBACK_MESSAGES as M } from "../../lib/feedbackMessages.js";
 import { TRACKER_CAMERA_ORIENTATION } from "../../lib/trackedExercises.js";
 import { createVoiceCoach } from "../../lib/voiceCoach.js";
@@ -30,29 +31,13 @@ import { numberWord } from "../../lib/numberWords.js";
  * FilesetResolver.forVisionTasks(...) at your own paths instead.
  */
 
-// Cache the vision fileset + landmarker across sessions so re-opening an exercise
-// doesn't reload the ~ several-MB wasm/model payload every time.
-let landmarkerPromise = null;
-async function getLandmarker() {
-  if (!landmarkerPromise) {
-    landmarkerPromise = (async () => {
-      const { FilesetResolver, PoseLandmarker } = await import("@mediapipe/tasks-vision");
-      const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm"
-      );
-      return PoseLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath:
-            "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-          delegate: "CPU",
-        },
-        runningMode: "VIDEO",
-        numPoses: 1,
-      });
-    })();
-  }
-  return landmarkerPromise;
-}
+// Which message to show/speak for each stable framing problem (see poseQuality.js).
+const FRAMING_MESSAGE = {
+  no_person: M.noPersonDetected,
+  cut_off: M.moveBackFullBody,
+  too_small: M.moveCloser,
+  low_confidence: M.lowConfidence,
+};
 
 const CONNECTIONS = [
   [11, 12], [11, 23], [12, 24], [23, 24],
@@ -70,6 +55,14 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
   const voiceCoachRef = useRef(createVoiceCoach());
   const prevRepsRef = useRef(0);
   const orientation = TRACKER_CAMERA_ORIENTATION[ex.id] || "frontal";
+  // Smoothing + framing verdict + "armed" latch — one instance per session.
+  const qualityRef = useRef(null);
+  if (!qualityRef.current) qualityRef.current = createPoseQuality({ orientation });
+  const armedAtRef = useRef(null);
+  // finish() runs from inside the camera loop, whose closure is frozen at the
+  // render the effect started in — so it must read live values from refs, not state.
+  const repsRef = useRef(0);
+  const elapsedRef = useRef(0);
   const setupTip = orientation === "side" ? M.cameraSetupTipSide : M.cameraSetupTipFrontal;
 
   const [status, setStatus] = useState("loading"); // loading | ready | denied | error
@@ -77,8 +70,11 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
   const [reps, setReps] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [feedback, setFeedback] = useState([]);
-  const [framingOk, setFramingOk] = useState(true);
-  const [personVisible, setPersonVisible] = useState(true);
+  // Stable (debounced) framing status: initializing | ok | no_person | cut_off | too_small | low_confidence
+  const [framing, setFraming] = useState("initializing");
+  const [armed, setArmed] = useState(false); // counting starts only once the setup has been good for a moment
+  const [hint, setHint] = useState(null);    // e.g. 'calibrating'
+
   const [voiceOn, setVoiceOn] = useState(voiceCoachRef.current.isSupported());
   const [voiceLang, setVoiceLang] = useState("en"); // 'en' | 'hi'
 
@@ -112,33 +108,43 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
 
     function loop(landmarker) {
       let consecutiveErrors = 0;
+      let lastVideoTime = -1;
       function frame() {
         if (cancelled) return;
         const video = videoRef.current;
         const canvas = canvasRef.current;
-        if (video && canvas && video.readyState >= 2 && running) {
+        // Only run the model on NEW video frames. rAF fires at the display
+        // rate (60-120 Hz) but the camera delivers ~30; re-running on the same
+        // frame wastes CPU/battery for identical landmarks.
+        if (video && canvas && video.readyState >= 2 && running && video.currentTime !== lastVideoTime) {
+          lastVideoTime = video.currentTime;
           try {
-            const now = performance.now();
-            const result = landmarker.detectForVideo(video, now);
-            const landmarks = result.landmarks && result.landmarks[0];
+            const nowMs = Date.now();
+            const result = landmarker.detectForVideo(video, performance.now());
+            const rawLandmarks = result.landmarks && result.landmarks[0];
             consecutiveErrors = 0;
 
-            drawOverlay(canvas, video, landmarks);
+            // Smooth + glitch-guard the landmarks, judge framing, latch "armed".
+            const q = qualityRef.current.process(rawLandmarks, nowMs);
+            drawOverlay(canvas, video, q.landmarks);
+            setFraming(q.framing.status);
+            setArmed(q.armed);
 
-            const trackable = hasMinimalPose(landmarks);
-            const fullyFramed = isWholeBodyInFrame(landmarks);
-            setFramingOk(fullyFramed);
-            setPersonVisible(trackable);
-
-            if (trackable) {
-              trackerRef.current.processFrame(landmarks, Date.now());
-              const count = trackerRef.current.getRepCount();
-              const currentFeedback = trackerRef.current.getFeedback();
+            let repJustCompleted = false;
+            if (q.trackable && q.armed) {
+              if (!armedAtRef.current) armedAtRef.current = nowMs;
+              const tracker = trackerRef.current;
+              tracker.processFrame(q.landmarks, nowMs, { aspect: video.videoWidth / video.videoHeight });
+              const count = tracker.getRepCount();
+              const currentFeedback = tracker.getFeedback();
+              repsRef.current = count;
               setReps(count);
               setFeedback(currentFeedback);
-              setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
+              setHint(tracker.getStatusHint ? tracker.getStatusHint() : null);
+              elapsedRef.current = Math.floor((nowMs - armedAtRef.current) / 1000);
+              setElapsed(elapsedRef.current);
 
-              const repJustCompleted = count > prevRepsRef.current;
+              repJustCompleted = count > prevRepsRef.current;
               prevRepsRef.current = count;
 
               if (repJustCompleted) {
@@ -146,22 +152,26 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
                 // the whole point if you're not looking at the screen. Fold in
                 // a correction too when one's active that rep, same utterance.
                 const num = numberWord(count, "en"), numHi = numberWord(count, "hi");
-                const primary = fullyFramed ? currentFeedback[0] : null;
+                const primary = q.framing.status === "ok" ? currentFeedback[0] : null;
                 const hasCorrection = primary && !primary.good;
                 const announcement = hasCorrection
                   ? { voiceEn: `${num}. ${primary.voiceEn}`, voiceHi: `${numHi}. ${primary.voiceHi}` }
                   : { voiceEn: num, voiceHi: numHi };
                 voiceCoachRef.current.speak(announcement, `rep-${count}`);
-              } else if (!fullyFramed) {
-                voiceCoachRef.current.speak(M.moveBackFullBody, "moveBack");
               }
 
               if (count >= targetReps) {
                 finish();
                 return;
               }
-            } else {
-              voiceCoachRef.current.speak(M.noPersonDetected, "noPerson");
+            }
+
+            // Framing prompts are debounced + capped in poseQuality.js
+            // (needs ~1.5 s of a real problem; max 3 spoken, >= 15 s apart),
+            // so a single bad frame can no longer nag "move back".
+            if (q.framing.speak && !repJustCompleted) {
+              const msg = FRAMING_MESSAGE[q.framing.status];
+              if (msg) voiceCoachRef.current.speak(msg, `framing-${q.framing.status}`);
             }
           } catch (err) {
             consecutiveErrors++;
@@ -205,18 +215,21 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
     ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     if (landmarks) {
-      ctx.strokeStyle = "#7C3AED";
+      // Low-visibility joints are the model GUESSING (e.g. the far leg hidden
+      // behind the near one) — draw them faint so nobody reads them as fact.
+      const conf = (p) => (p && (p.visibility ?? 1) >= 0.5);
       ctx.lineWidth = 4;
       CONNECTIONS.forEach(([a, b]) => {
         const p1 = landmarks[a], p2 = landmarks[b];
         if (!p1 || !p2) return;
+        ctx.strokeStyle = conf(p1) && conf(p2) ? "#7C3AED" : "rgba(124,58,237,0.25)";
         ctx.beginPath();
         ctx.moveTo(p1.x * canvas.width, p1.y * canvas.height);
         ctx.lineTo(p2.x * canvas.width, p2.y * canvas.height);
         ctx.stroke();
       });
-      ctx.fillStyle = "#7C3AED";
       landmarks.forEach((p) => {
+        ctx.fillStyle = conf(p) ? "#7C3AED" : "rgba(124,58,237,0.25)";
         ctx.beginPath();
         ctx.arc(p.x * canvas.width, p.y * canvas.height, 5, 0, Math.PI * 2);
         ctx.fill();
@@ -229,8 +242,8 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
     if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
     onFinish({
       sets: prescribed ? prescribed.sets : ex.sets,
-      duration: elapsed,
-      reps,
+      duration: elapsedRef.current,
+      reps: repsRef.current,
       formFeedback: trackerRef.current.getFeedback(),
     });
   }
@@ -314,21 +327,33 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
           </div>
         )}
 
-        {status === "ready" && !personVisible && (
-          <div className="absolute bottom-3 left-3 right-3 bg-rose-600/90 text-white text-xs px-3 py-2 rounded-xl text-center">
-            <span className="block font-medium">{M.noPersonDetected.en}</span>
-            <span className="block" lang="hi">{M.noPersonDetected.hi}</span>
+        {/* Not armed yet: nothing is counted until the camera sees you clearly. */}
+        {status === "ready" && !armed && (
+          <div className="absolute bottom-3 left-3 right-3 bg-black/70 text-white text-xs px-3 py-2 rounded-xl text-center">
+            <span className="block font-medium">{M.getInPosition.en}</span>
+            <span className="block text-gray-300" lang="hi">{M.getInPosition.hi}</span>
+            {FRAMING_MESSAGE[framing] && (
+              <span className="block mt-1 text-amber-300">{FRAMING_MESSAGE[framing].en}</span>
+            )}
           </div>
         )}
 
-        {status === "ready" && personVisible && !framingOk && (
-          <div className="absolute bottom-3 left-3 right-3 bg-amber-600/90 text-white text-xs px-3 py-2 rounded-xl text-center">
-            <span className="block font-medium">{M.moveBackFullBody.en}</span>
-            <span className="block" lang="hi">{M.moveBackFullBody.hi}</span>
+        {/* Armed but the view has been bad for ~1.5 s (debounced — never a single-frame flash). */}
+        {status === "ready" && armed && FRAMING_MESSAGE[framing] && (
+          <div className={`absolute bottom-3 left-3 right-3 text-white text-xs px-3 py-2 rounded-xl text-center ${framing === "no_person" ? "bg-rose-600/90" : "bg-amber-600/90"}`}>
+            <span className="block font-medium">{FRAMING_MESSAGE[framing].en}</span>
+            <span className="block" lang="hi">{FRAMING_MESSAGE[framing].hi}</span>
           </div>
         )}
 
-        {status === "ready" && personVisible && framingOk && feedback.length > 0 && (
+        {status === "ready" && armed && !FRAMING_MESSAGE[framing] && hint === "calibrating" && reps === 0 && (
+          <div className="absolute bottom-3 left-3 right-3 bg-black/60 text-white text-xs px-3 py-2 rounded-xl text-center">
+            <span className="block">{M.holdStill.en}</span>
+            <span className="block text-gray-300" lang="hi">{M.holdStill.hi}</span>
+          </div>
+        )}
+
+        {status === "ready" && armed && !FRAMING_MESSAGE[framing] && hint !== "calibrating" && feedback.length > 0 && (
           <div className="absolute bottom-3 left-3 right-3 bg-black/60 text-white text-xs px-3 py-2 rounded-xl text-center">
             <span className="block">{feedback[0].en}</span>
             <span className="block text-gray-300" lang="hi">{feedback[0].hi}</span>
