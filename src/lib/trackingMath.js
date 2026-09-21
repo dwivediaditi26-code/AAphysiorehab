@@ -89,3 +89,18 @@ export function hasMinimalPose(landmarks, threshold = 0.3) {
     })
   );
 }
+
+// Hip + knee on AT LEAST ONE side: the pelvis and a lower limb. The minimal
+// pose for exercises tracked from the pelvis down (bridging), where the head
+// and shoulders are routinely out of frame because the phone is close.
+const SIDE_LEG = [[23, 25], [24, 26]];
+
+export function hasLowerBody(landmarks, threshold = 0.3) {
+  if (!landmarks) return false;
+  return SIDE_LEG.some((pair) =>
+    pair.every((i) => {
+      const p = landmarks[i];
+      return !!p && (p.visibility ?? 1) >= threshold;
+    })
+  );
+}

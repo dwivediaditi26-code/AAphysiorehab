@@ -19,6 +19,9 @@ import { createLandmarkSmoother } from "./src/lib/landmarkSmoother.js";
 import { createPoseQuality, assessFraming } from "./src/lib/poseQuality.js";
 import { isWholeBodyInFrame, angleAt, angleAtAspect } from "./src/lib/trackingMath.js";
 import { FEEDBACK_MESSAGES as M } from "./src/lib/feedbackMessages.js";
+import { createSingleLegBridgeTracker } from "./src/lib/singleLegBridgeTracker.js";
+import { createStartCountdown } from "./src/lib/startCountdown.js";
+import { createLiveSession } from "./src/lib/liveSession.js";
 
 const fx = JSON.parse(fs.readFileSync(new URL("./test-fixtures/glute-bridge-real-landmarks.json", import.meta.url)));
 const ASPECT = fx.aspect;
@@ -54,20 +57,23 @@ const restIdx = range(0, firstAt(0.05) - 1);                    // resting frame
 const restHold = () => range(30, 60);                            // a stretch of clean rest
 const oneRep = (peakIdx = TOP) => [...range(0, peakIdx), ...range(peakIdx, 0)];
 
-function runTracker(frames, { smooth = true, trackerConfig } = {}) {
+// `transform` is applied to the settle-at-rest frames, so a test that alters the
+// picture (masks the upper body, changes the frame shape) alters those too.
+function runTracker(frames, { smooth = true, trackerConfig, transform = (l) => l, aspect = ASPECT } = {}) {
   const tracker = createGluteBridgeTracker(trackerConfig);
   const sm = createLandmarkSmoother();
   let t = 0;
   for (const f of frames) {
     const lms = smooth ? sm.smooth(f.lms, f.t) : f.lms;
-    tracker.processFrame(lms, f.t, { aspect: ASPECT });
+    tracker.processFrame(lms, f.t, { aspect });
     t = f.t;
   }
   // settle at rest so the last rep can finalize (debounce)
   for (let i = 0; i < 30; i++) {
     t += DT;
-    const lms = smooth ? sm.smooth(clone(base[0]), t) : clone(base[0]);
-    tracker.processFrame(lms, t, { aspect: ASPECT });
+    const rest = transform(clone(base[0]));
+    const lms = smooth ? sm.smooth(rest, t) : rest;
+    tracker.processFrame(lms, t, { aspect });
   }
   return tracker;
 }
@@ -218,6 +224,241 @@ console.log("\n--- 5. Per-patient baseline and aspect-ratio math ---\n");
   const a = { x: 0.5, y: 0.5 }, b = { x: 0.5 + 200 / 1280, y: 0.5 }, c = { x: 0.5 + 200 / 1280, y: 0.5 + 200 / 720 };
   const wrong = angleAt(b, a, c), right = angleAtAspect(b, a, c, 1280 / 720);
   check("Aspect-corrected angle reads a true 45 deg as 45 (raw normalized math does not)", Math.abs(right - 45) < 0.5 && Math.abs(wrong - 45) > 5, `raw ${wrong.toFixed(1)} vs corrected ${right.toFixed(1)}`);
+}
+
+// ---------------------------------------------------------------- 6. pelvis + lower limb only
+console.log("\n--- 6. Pelvis + lower limb only: head/shoulders/arms out of frame (phone close or held portrait) ---\n");
+// The real clip with the upper body pushed beyond the picture edge, the way MediaPipe
+// reports a body part that is cut off (position outside 0..1, low confidence).
+const UPPER = [0, 11, 12, 13, 14, 15, 16]; // nose, shoulders, elbows, wrists
+function maskUpper(lms, { vis = 0.15 } = {}) {
+  const l = clone(lms);
+  for (const j of UPPER) { l[j].x = 1.1; l[j].visibility = vis; }
+  return l;
+}
+const maskFrames = (frames, opts) => frames.map(({ lms, t }) => ({ lms: maskUpper(lms, opts), t }));
+const maskT = (l) => maskUpper(l);
+const maskedBase = base.map((l) => maskUpper(l));
+const maskedThree = maskFrames(threeReps);
+const playM = (idx, opts) => maskFrames(play(idx, opts));
+
+{
+  // The reported bug, reproduced: everything from the pelvis down is in shot, only the head/shoulders are not.
+  const seen = maskUpper(base[100], { vis: 0.6 }); // the model "believes" in the shoulder although it is outside the picture
+  const whole = assessFraming(seen, { orientation: "side", region: "whole" });
+  check("Whole-body rule says 'cut off' when only the head/shoulders are out of shot (the reported bug)", whole.status === "cut_off" && whole.cutOff.includes("shoulder"), `status ${whole.status}, missing: ${whole.cutOff.join(", ")}`);
+  const lowerVerdict = assessFraming(seen, { orientation: "side", region: "lower", aspect: ASPECT });
+  check("Pelvis + lower-limb rule accepts that very same frame", lowerVerdict.status === "ok", `status ${lowerVerdict.status}`);
+  const unsure = assessFraming(maskUpper(base[100]), { orientation: "side", region: "whole" });
+  check("...and with unconfident shoulders the whole-body rule can't find a person at all", unsure.status === "no_person", `status ${unsure.status}`);
+}
+{
+  const q = createPoseQuality({ orientation: "side", region: "lower" });
+  let spoke = 0, nonOk = 0, armedAt = null, t = 1000;
+  for (const l of maskedBase) {
+    const r = q.process(clone(l), t, { aspect: ASPECT });
+    if (r.framing.speak) spoke++;
+    if (r.framing.status !== "ok" && r.framing.status !== "initializing") nonOk++;
+    if (r.armed && armedAt === null) armedAt = t - 1000;
+    t += DT;
+  }
+  check("Lower-body framing: no 'move back' on the whole clip with the upper body out of frame", nonOk === 0 && spoke === 0, `problem frames ${nonOk}, voice prompts ${spoke}`);
+  check("...and it arms within ~1 s", armedAt !== null && armedAt <= 1200, `armed after ${armedAt} ms`);
+}
+{
+  const t = runTracker(maskedThree, { transform: maskT });
+  check("Upper body out of frame: 3 correct reps -> exactly 3", t.getRepCount() === 3, `counted ${t.getRepCount()}`);
+  check("...measured from the pelvis alone (no shoulder used)", t.getSignalReference() === "lowerBody", `signal '${t.getSignalReference()}'`);
+  const raw = runTracker(maskedThree, { smooth: false, transform: maskT });
+  check("...exactly 3 even with the smoother off", raw.getRepCount() === 3, `counted ${raw.getRepCount()}`);
+  check("...and correct reps get no false correction", t.getFeedback().every((f) => f.good), `feedback: ${t.getFeedback().map((f) => f.voiceEn).join(", ")}`);
+  const stats = t.getLastRepStats();
+  check("...and a full-height lift reads as full height", stats && stats.peakExt >= 0.85, `peak ${stats && stats.peakExt.toFixed(2)}`);
+  const idle = runTracker(maskFrames(play([...restHold(), ...restHold(), ...restHold()])), { transform: maskT });
+  check("...lying still counts 0 reps", idle.getRepCount() === 0, `counted ${idle.getRepCount()}`);
+}
+
+// wrong-form reps with only the pelvis + lower limb visible
+const extOfLower = (() => { const sig = createHipExtensionSignal(); return maskedBase.map((l) => sig.process(l, { aspect: ASPECT }).ext ?? 0); })();
+const firstAtLower = (thr) => extOfLower.findIndex((e) => e >= thr);
+{
+  const half = firstAtLower(0.55);
+  const low = runTracker(playM(oneRep(half)), { transform: maskT });
+  check("Pelvis only: half-height bridge counts AND says 'lift higher'", low.getRepCount() === 1 && low.getFeedback().includes(M.liftHipsHigher), `reps ${low.getRepCount()}, cue: ${low.getFeedback().map((f) => f.voiceEn).join(", ")}`);
+  // A clear sag: the hips drop to ~30% of the lift. (Smoothing rounds off a fast dip, so the depth the
+  // tracker sees is well under the nominal one — a dip only just past the 25% detector threshold can
+  // be caught by the shoulder-based angle and missed by the pelvis-only signal; a clear one is caught by both.)
+  const low30 = firstAtLower(0.3);
+  const sag = runTracker(playM([...range(0, TOP), ...range(TOP, low30), ...range(low30, TOP), ...range(TOP, 0)]), { transform: maskT });
+  check("Pelvis only: hips sag clearly mid-hold then recover -> 1 rep + 'hips up'", sag.getRepCount() === 1 && sag.getFeedback().includes(M.keepHipsUp), `reps ${sag.getRepCount()}, cue: ${sag.getFeedback().map((f) => f.voiceEn).join(", ")}`);
+  const fast = runTracker(playM(oneRep(), { speed: 4 }), { transform: maskT });
+  check("Pelvis only: rep at 4x speed -> 1 rep + 'slower'", fast.getRepCount() === 1 && fast.getFeedback().includes(M.slowerRiseLower), `reps ${fast.getRepCount()}, cue: ${fast.getFeedback().map((f) => f.voiceEn).join(", ")}`);
+  const slow = runTracker(playM(oneRep(), { speed: 0.5 }), { transform: maskT });
+  check("Pelvis only: slow, controlled rep (0.5x) -> no false 'slower'", slow.getRepCount() === 1 && slow.getFeedback().every((f) => f.good), `reps ${slow.getRepCount()}`);
+}
+{
+  const r = rng(11);
+  const noisy = maskedThree.map(({ lms, t }) => {
+    const out = clone(lms);
+    for (const p of out) { p.x += gauss(r) * 0.006; p.y += gauss(r) * 0.006; }
+    if (r() < 0.04) for (const j of [23, 25]) { out[j].x = r(); out[j].y = r(); out[j].visibility = 0.12; } // hip/knee "hallucinate"
+    return { lms: out, t };
+  });
+  const t = runTracker(noisy, { transform: maskT });
+  check("Pelvis only: heavy noise + 4% hallucinated hip/knee frames -> still exactly 3 reps", t.getRepCount() === 3, `counted ${t.getRepCount()}`);
+  check("...and no false correction from the noise", t.getFeedback().every((f) => f.good), `feedback: ${t.getFeedback().map((f) => f.voiceEn).join(", ")}`);
+}
+
+// which signal is used, and switching
+{
+  const full = runTracker(threeReps);
+  check("Whole body in frame: the validated shoulder-hip-knee angle is still what's used", full.getSignalReference() === "torso" && full.getRepCount() === 3, `signal '${full.getSignalReference()}', ${full.getRepCount()} reps`);
+  const part1 = play([...oneRep(), ...restHold()]);
+  const part2 = maskFrames(play([...restHold(), ...restHold(), ...oneRep(), ...restHold(), ...oneRep()], { t0: part1[part1.length - 1].t + DT }));
+  const sw = runTracker([...part1, ...part2], { transform: maskT });
+  check("Shoulder lost for good mid-session: switches to the pelvis signal and keeps counting", sw.getRepCount() === 3 && sw.getSignalReference() === "lowerBody", `${sw.getRepCount()} reps, signal '${sw.getSignalReference()}'`);
+}
+
+// phone on the floor: a lying body sits at the very bottom edge of the picture
+{
+  const floor = (l) => l.map((p) => ({ ...p, y: p.y + 0.19 }));
+  const sample = floor(base[200]);
+  const whole = assessFraming(sample, { orientation: "side", region: "whole" });
+  const low = assessFraming(sample, { orientation: "side", region: "lower", aspect: ASPECT });
+  check("Phone on the floor (body at the bottom edge): whole-body rule says 'cut off'", whole.status === "cut_off", `status ${whole.status}`);
+  check("...pelvis + lower-limb rule doesn't (a joint sitting on the edge isn't cut off)", low.status === "ok", `status ${low.status}, lowest joint y ${Math.max(sample[27].y, sample[28].y).toFixed(3)}`);
+  const t = runTracker(threeReps.map(({ lms, t }) => ({ lms: floor(lms), t })), { transform: floor });
+  check("...and 3 reps still count from there", t.getRepCount() === 3, `counted ${t.getRepCount()}`);
+}
+
+// phone held portrait (9:16), person half the size, extra jitter
+{
+  const PORTRAIT = 0.5625;
+  const toPortrait = (l, s = 0.5) => l.map((p) => ({ ...p, x: ((p.x * ASPECT - 0.4565) * s + PORTRAIT / 2) / PORTRAIT, y: (p.y - 0.65) * s + 0.5 }));
+  const r = rng(3);
+  const jitter = (l) => l.map((p) => ({ ...p, x: p.x + gauss(r) * 0.004, y: p.y + gauss(r) * 0.004 }));
+  const verdict = assessFraming(toPortrait(maskUpper(base[200])), { orientation: "side", region: "lower", aspect: PORTRAIT });
+  check("Portrait phone, person half the size: framing is fine (not 'too small' / 'cut off')", verdict.status === "ok", `status ${verdict.status}`);
+  const frames = maskedThree.map(({ lms, t }) => ({ lms: jitter(toPortrait(lms)), t }));
+  const t = runTracker(frames, { transform: (l) => jitter(toPortrait(maskUpper(l))), aspect: PORTRAIT });
+  check("Portrait, half size, extra jitter, upper body out of frame: 3 correct reps -> exactly 3", t.getRepCount() === 3, `counted ${t.getRepCount()}`);
+}
+
+// the other framing verdicts still work in the lower region
+{
+  const tiny = clone(base[100]);
+  for (const p of tiny) { p.x = 0.5 + (p.x - 0.5) * 0.35; p.y = 0.5 + (p.y - 0.5) * 0.35; }
+  check("Lower-body framing: tiny person -> 'too_small' (move closer)", assessFraming(tiny, { orientation: "side", region: "lower", aspect: ASPECT }).status === "too_small");
+  const dim = clone(base[100]);
+  for (const [h, k, a] of [[23, 25, 27], [24, 26, 28]]) { dim[h].visibility = 0.5; dim[k].visibility = 0.3; dim[a].visibility = 0.1; }
+  check("...legs seen but the model unsure -> 'low_confidence'", assessFraming(dim, { orientation: "side", region: "lower", aspect: ASPECT }).status === "low_confidence");
+  check("...no pose -> 'no_person'", assessFraming(null, { orientation: "side", region: "lower" }).status === "no_person");
+
+  const q = createPoseQuality({ orientation: "side", region: "lower" });
+  let t = 1000, first = null, spoke = 0, missing = [];
+  for (let i = 0; i < 1500; i++) { // 50 s with both feet really below the bottom edge
+    const l = clone(base[100]);
+    for (const j of [27, 28]) { l[j].y = 1.08; l[j].visibility = 0.2; }
+    const r = q.process(l, t, { aspect: ASPECT });
+    if (r.framing.status === "cut_off" && first === null) { first = t - 1000; missing = r.framing.cutOff; }
+    if (r.framing.speak) spoke++;
+    t += DT;
+  }
+  check("...feet really cut off IS reported (about 1.5 s in), naming the ankle", first !== null && first >= 1000 && first <= 2600 && missing.includes("ankle"), `reported after ${first} ms, missing: ${missing.join(", ")}`);
+  check("...and the voice prompt is still capped (<= 3 in 50 s)", spoke >= 1 && spoke <= 3, `${spoke} prompts`);
+}
+{
+  // Two sides that look nearly alike must not swap "near side" every frame.
+  const q = createPoseQuality({ orientation: "side", region: "lower" });
+  let t = 1000, flips = 0, prev = null;
+  for (let i = 0; i < 120; i++) {
+    const l = clone(base[100]);
+    const a = i % 2 ? 0.85 : 0.8, b = i % 2 ? 0.8 : 0.85;
+    for (const j of [23, 25, 27]) l[j].visibility = a;
+    for (const j of [24, 26, 28]) l[j].visibility = b;
+    const r = q.process(l, t, { aspect: ASPECT }); t += DT;
+    if (prev && r.verdict.side !== prev) flips++;
+    prev = r.verdict.side;
+  }
+  check("Near side does not flip-flop between two near-identical sides", flips <= 1, `${flips} flips in 120 frames`);
+}
+{
+  const tr = createSingleLegBridgeTracker();
+  let t = 1000;
+  for (let i = 0; i < 60; i++) tr.processFrame(maskUpper(base[i]), (t += DT), { aspect: ASPECT });
+  check("Single Leg Bridge, upper body out of frame: pelvis signal calibrates (smoke test only — no single-leg footage to validate counting)", tr.getStatusHint() === null, `hint: ${tr.getStatusHint()}`);
+}
+
+// ---------------------------------------------------------------- 7. countdown + the whole session pipeline
+console.log("\n--- 7. \"Let's get started in 3, 2, 1\", and the whole session pipeline on real landmarks ---\n");
+{
+  const cd = createStartCountdown();
+  const log = [];
+  let t = 0, wentAt = null;
+  const tick = (ready) => { const r = cd.update(ready, t); if (r.announce) log.push(`${r.announce}:${r.number}@${t}`); if (r.justFinished) wentAt = t; t += 50; return r; };
+  for (let i = 0; i < 20; i++) tick(false); // 1 s: setup not good yet
+  check("Countdown stays silent until the setup is good", log.length === 0 && wentAt === null);
+  for (let i = 0; i < 120; i++) tick(true);
+  check("Says 'Let's get started in 3', then 2, then 1, then Go 3.4 s after the setup is good", log.join(" ") === "start:3@1000 tick:2@2400 tick:1@3400" && wentAt === 4400, `${log.join(" ")}  Go @${wentAt}`);
+}
+{
+  const cd = createStartCountdown();
+  let t = 0; const starts = [];
+  const tick = (ready) => { const r = cd.update(ready, t); if (r.announce === "start") starts.push(t); t += 50; return r; };
+  for (let i = 0; i < 30; i++) tick(true);  // 1.5 s in
+  for (let i = 0; i < 6; i++) tick(false);  // setup lost
+  let r; for (let i = 0; i < 200; i++) r = tick(true);
+  check("Setup lost mid-countdown -> starts over from 3 (nobody is counted in unseen)", starts.length === 2 && r.phase === "done", `starts at ${starts.join(", ")} ms`);
+  const a = cd.update(false, t + 10), b = cd.update(true, t + 20);
+  check("Once finished it stays finished (never counts down twice)", a.phase === "done" && b.phase === "done" && !b.justFinished);
+}
+{
+  let reps = 0, resets = 0;
+  const stub = () => ({ processFrame() {}, getRepCount: () => reps, getFeedback: () => [M.goodBridgeHeight], getStatusHint: () => null, reset() { resets++; reps = 0; } });
+  const s = createLiveSession({ trackerFactory: stub, orientation: "side", region: "lower" });
+  let t = 1000, goAt = null, repBeforeGo = false;
+  for (let i = 0; i < 200; i++) {
+    if (i === 60) reps = 1; // a rep the tracker "sees" while the countdown is still running
+    const out = s.process(clone(base[100]), t, { aspect: ASPECT }); t += DT;
+    for (const ev of out.events) { if (ev.type === "go") goAt = t; if (ev.type === "rep" && goAt === null) repBeforeGo = true; }
+  }
+  check("A rep made during the countdown is not counted or announced; the tracker starts clean at Go", resets === 1 && !repBeforeGo && goAt !== null, `tracker resets: ${resets}`);
+}
+
+/** Drive the exact pipeline the screen uses, from a cold start, and log what it would say/show. */
+function runSession(frames, { region, target = 3, aspect = ASPECT } = {}) {
+  const s = createLiveSession({ trackerFactory: createGluteBridgeTracker, orientation: "side", region, targetReps: target });
+  const log = { events: [], armedAt: null, goAt: null, finishedAt: null, reps: 0, phases: new Set() };
+  const t0 = frames[0].t;
+  for (const f of frames) {
+    const out = s.process(clone(f.lms), f.t, { aspect });
+    if (out.armed && log.armedAt === null) log.armedAt = f.t - t0;
+    out.started ? log.phases.add("live") : out.countdown !== null ? log.phases.add("countdown") : log.phases.add("positioning");
+    for (const ev of out.events) { log.events.push(ev); if (ev.type === "go") log.goAt = f.t - t0; }
+    log.reps = out.reps;
+    if (out.finished) { log.finishedAt = f.t - t0; break; }
+  }
+  return log;
+}
+{
+  // ~7 s lying still (room for the countdown), then 3 reps — with the head/shoulders out of frame.
+  const restLoop = [...range(0, 110), ...range(0, 110)];
+  const idx = [...restLoop, ...oneRep(), ...restHold(), ...oneRep(), ...restHold(), ...oneRep(), ...restHold()];
+  const lowerRun = runSession(maskFrames(play(idx)), { region: "lower" });
+  const seq = lowerRun.events.filter((e) => e.type !== "framing").map((e) => e.type === "countdown" ? `${e.announce}:${e.number}` : e.type === "rep" ? `rep${e.count}` : e.type);
+  check("Pelvis + lower limb only: says 3, 2, 1, Go, then counts rep 1, 2, 3", seq.join(" ") === "start:3 tick:2 tick:1 go rep1 rep2 rep3", seq.join(" "));
+  check("...starts counting ~4 s after the camera first sees a good setup", lowerRun.goAt !== null && lowerRun.goAt >= 3700 && lowerRun.goAt <= 4300, `Go at ${lowerRun.goAt} ms`);
+  check("...finishes at exactly the target, with no 'move back' at any point", lowerRun.reps === 3 && lowerRun.finishedAt !== null && !lowerRun.events.some((e) => e.type === "framing"), `${lowerRun.reps} reps, ${lowerRun.events.filter((e) => e.type === "framing").length} framing prompts`);
+  check("...and passes through positioning -> countdown -> live", ["positioning", "countdown", "live"].every((p) => lowerRun.phases.has(p)), [...lowerRun.phases].join(", "));
+
+  // Same footage under the old whole-body rule: the reported behaviour.
+  const wholeRun = runSession(maskFrames(play(idx), { vis: 0.6 }), { region: "whole" });
+  const nags = wholeRun.events.filter((e) => e.type === "framing" && e.status === "cut_off").length;
+  check("Same footage under the whole-body rule: never starts and nags 'move back' (the reported bug)", wholeRun.armedAt === null && wholeRun.reps === 0 && nags >= 1, `armed: ${wholeRun.armedAt}, reps ${wholeRun.reps}, 'move back' prompts ${nags}`);
+
+  // Fully visible person: still starts with the countdown, still counts, still uses the validated angle.
+  const fullRun = runSession(play(idx), { region: "lower" });
+  check("Whole body in frame, pelvis+lower-limb rule: same countdown, same 3 reps", fullRun.reps === 3 && fullRun.goAt !== null && fullRun.goAt <= 4300, `${fullRun.reps} reps, Go at ${fullRun.goAt} ms`);
 }
 
 const failed = results.filter((r) => !r).length;

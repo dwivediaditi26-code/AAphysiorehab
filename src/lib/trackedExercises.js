@@ -61,6 +61,16 @@ export const HOLD_TRACKED_EXERCISES = {
   e20: createAdductorSqueezeTracker, // Adductor Squeeze — lying down, side view
 };
 
+// What has to be in frame for the "move back / move closer" check (see
+// poseQuality.js). Default is 'whole' (near-side shoulder-hip-knee-ankle).
+// 'lower' = the pelvis and lower limb only (hip-knee-ankle): bridging, where
+// the phone is usually close enough that the head and shoulders are out of
+// shot, and the tracker reads the pelvis and thigh, not the torso.
+export const TRACKER_FRAMING_REGION = {
+  e3: "lower",   // Glute Bridge
+  e17: "lower",  // Single Leg Bridge
+};
+
 // Which camera orientation each tracked exercise expects — drives the
 // on-screen setup tip in TrackedExerciseSession.jsx so the instruction shown
 // actually matches the exercise, instead of one blanket message.

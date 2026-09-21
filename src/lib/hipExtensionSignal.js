@@ -21,10 +21,23 @@
  *  4. Low-confidence frames are REPORTED as invalid (valid:false) rather than
  *     fed into the state machine — the tracker just skips them, so a bad
  *     frame can never invent or cancel a rep.
+ *  5. TWO REFERENCES. The angle above needs the shoulder in frame. With the
+ *     phone close or held portrait the head and shoulders are often out of
+ *     shot, so when the shoulder is not reliably inside the image we measure
+ *     the pelvis and thigh only (pelvicLiftSignal.js: pelvis rise in thigh
+ *     lengths) — the same "pelvis and lower limb" the framing check asks for.
+ *     Both run every frame so their rest baselines calibrate together. The
+ *     choice is made on the first frame and is one-way: 'torso' switches to
+ *     'lowerBody' if the shoulder stays unreliable for ~1 s, never back, so a
+ *     shoulder flickering at the edge of the picture can't flip the signal.
+ *     `reference` in the result says which is in use; `raw` is that
+ *     reference's own value (degrees for 'torso', thigh lengths for
+ *     'lowerBody') and is what relaxRest() wants.
  *
  * Pure JS, no dependencies.
  */
 import { angleAtAspect, clamp01, median } from "./trackingMath.js";
+import { createPelvicLiftSignal } from "./pelvicLiftSignal.js";
 
 const CHAIN = {
   left: { shoulder: 11, hip: 23, knee: 25 },
@@ -33,6 +46,9 @@ const CHAIN = {
 
 export function createHipExtensionSignal(config = {}) {
   const MODE = config.mode ?? "nearSide";            // 'nearSide' | 'average'
+  const LOWER_FALLBACK = config.lowerBodyFallback ?? true;   // measure pelvis-only when the shoulder isn't reliably in frame
+  const SHOULDER_MIN_VIS = config.shoulderMinVisibility ?? 0.5;
+  const TORSO_LOST_FRAMES = config.torsoLostFrames ?? 30;    // ~1 s of an unreliable shoulder before switching for good
   const REST_DEFAULT = config.restDefault ?? 125;    // deg, used until/unless a stable rest is measured
   const TARGET = config.targetAngle ?? 170;          // deg = full extension
   const MIN_RANGE = config.minRange ?? 35;           // never let (target - rest) shrink below this
@@ -42,12 +58,22 @@ export function createHipExtensionSignal(config = {}) {
   const CAL_GIVE_UP = config.calGiveUp ?? 90;        // frames, then fall back to REST_DEFAULT
   const REST_MIN = 90, REST_MAX = 150;              // plausible resting hip angle when lying knees-bent
 
+  const pelvic = createPelvicLiftSignal({ mode: MODE, ...config.pelvic });
+  let reference = null; // 'torso' | 'lowerBody' — decided on the first frame, see header note 5
+  let torsoLost = 0;
+
   let side = "left";
   let rest = REST_DEFAULT;
   let calibrated = false;
   let framesSeen = 0;
   const raw = [];    // last 5 angles (median filter)
   const recent = []; // last CAL_FRAMES filtered angles (calibration window)
+
+  // A shoulder we can trust: seen with confidence AND actually inside the image
+  // (a shoulder MediaPipe places outside the frame is a guess, however sure it sounds).
+  const shoulderReliable = (p) =>
+    (p.visibility ?? 1) >= SHOULDER_MIN_VIS && p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1;
+  const calibratedNow = () => (reference === "lowerBody" ? pelvic.isCalibrated() : calibrated);
 
   function pick(landmarks, joint) {
     if (MODE === "nearSide") return landmarks[CHAIN[side][joint]];
@@ -67,15 +93,30 @@ export function createHipExtensionSignal(config = {}) {
   }
 
   return {
-    /** Returns { valid, angle, ext, side, calibrated, restAngle, targetAngle }. */
+    /** Returns { valid, ext, raw, reference, side, calibrated } plus, for the
+     * 'torso' reference, { angle, restAngle, targetAngle }. */
     process(landmarks, meta = {}) {
-      if (!landmarks || landmarks.length < 27) return { valid: false, calibrated, restAngle: rest };
+      if (!landmarks || landmarks.length < 27) return { valid: false, calibrated: calibratedNow(), restAngle: rest };
       if (MODE === "nearSide") chooseSide(landmarks);
 
       const shoulder = pick(landmarks, "shoulder"), hip = pick(landmarks, "hip"), knee = pick(landmarks, "knee");
-      if (!shoulder || !hip || !knee) return { valid: false, calibrated, restAngle: rest };
+
+      if (LOWER_FALLBACK) {
+        const lower = pelvic.process(landmarks, meta); // runs every frame so both baselines calibrate together
+        const torsoUsable = !!shoulder && shoulderReliable(shoulder);
+        if (reference === null) reference = torsoUsable ? "torso" : "lowerBody";
+        else if (reference === "torso") {
+          torsoLost = torsoUsable ? 0 : torsoLost + 1;
+          if (torsoLost >= TORSO_LOST_FRAMES) reference = "lowerBody";
+        }
+        if (reference === "lowerBody") return { ...lower, reference };
+      } else if (reference === null) {
+        reference = "torso";
+      }
+
+      if (!shoulder || !hip || !knee) return { valid: false, calibrated, restAngle: rest, reference };
       const minVis = Math.min(shoulder.visibility ?? 1, hip.visibility ?? 1, knee.visibility ?? 1);
-      if (minVis < MIN_VIS) return { valid: false, calibrated, restAngle: rest };
+      if (minVis < MIN_VIS) return { valid: false, calibrated, restAngle: rest, reference };
 
       raw.push(angleAtAspect(shoulder, hip, knee, meta.aspect));
       if (raw.length > 5) raw.shift();
@@ -95,18 +136,24 @@ export function createHipExtensionSignal(config = {}) {
 
       const target = Math.max(TARGET, rest + MIN_RANGE);
       const ext = clamp01((angle - rest) / (target - rest));
-      return { valid: true, angle, ext, side, calibrated, restAngle: rest, targetAngle: target };
+      return { valid: true, angle, raw: angle, ext, side, calibrated, restAngle: rest, targetAngle: target, reference };
     },
     /** Let the baseline drift DOWN only (patient relaxes flatter); never up,
-     * so holding a half-lift can't quietly raise "rest". */
-    relaxRest(angle) {
-      if (calibrated && angle < rest - 3 && angle >= REST_MIN) rest = rest * 0.9 + angle * 0.1;
+     * so holding a half-lift can't quietly raise "rest". Pass the `raw` value
+     * from process() (the pelvic reference tracks its own last position). */
+    relaxRest(rawValue) {
+      if (reference === "lowerBody") { pelvic.relaxRest(); return; }
+      if (calibrated && rawValue < rest - 3 && rawValue >= REST_MIN) rest = rest * 0.9 + rawValue * 0.1;
     },
-    isCalibrated() { return calibrated; },
-    getRest() { return rest; },
+    isCalibrated() { return calibratedNow(); },
+    /** Resting value of the reference in use: degrees ('torso') or image y ('lowerBody'). */
+    getRest() { return reference === "lowerBody" ? pelvic.getRest() : rest; },
+    /** 'torso' | 'lowerBody' | null (nothing seen yet). */
+    getReference() { return reference; },
     reset() {
       side = "left"; rest = REST_DEFAULT; calibrated = false; framesSeen = 0;
       raw.length = 0; recent.length = 0;
+      pelvic.reset(); reference = null; torsoLost = 0;
     },
   };
 }

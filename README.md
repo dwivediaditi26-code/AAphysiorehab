@@ -106,6 +106,19 @@ Camera tracking runs every landmark through `src/lib/poseQuality.js` and
   filter, per-patient resting baseline. Cues: slower, lift higher, hips
   sagged. Deliberately no cue for what a camera can't measure: core/glute
   engagement, over-arching, left/right hip level from a side view.
+- **Bridging needs only the pelvis and lower limb in frame.** Its framing check
+  (`TRACKER_FRAMING_REGION` in `trackedExercises.js`) asks for the near-side hip,
+  knee and ankle — not the head or shoulders — and tolerates a body sitting on
+  the bottom edge (phone on the floor). When the shoulder isn't reliably in
+  shot, the signal switches to `pelvicLiftSignal.js` (pelvis rise measured in
+  thigh lengths); with the shoulder in shot the shoulder-hip-knee angle is
+  used as before. The pelvis-only target (a 0.35-thigh-length rise = full
+  bridge) is one person on one clip — validate it like the other thresholds.
+- **Start countdown** (`startCountdown.js`, `liveSession.js`): once the camera
+  has seen a good setup, the screen says "Let's get started in 3, 2, 1" and
+  nothing counts until Go. The resting baseline is measured while the patient
+  lies still during the countdown. If the setup is lost mid-countdown it starts
+  over from 3.
 - Model: Pose Landmarker **Full**, WASM pinned to the installed package version
   (`src/lib/landmarker.js`: keep `TASKS_VISION_VERSION` equal to
   `package-lock.json`), GPU delegate with CPU fallback.

@@ -91,6 +91,13 @@ export const FEEDBACK_MESSAGES = {
     voiceEn: "Move back",
     voiceHi: "पीछे हटें",
   },
+  // Bridging only needs the pelvis and lower limb in frame — say exactly that.
+  moveBackLowerBody: {
+    en: "Your hips, knees and feet need to be in frame — move your phone back",
+    hi: "आपके कूल्हे, घुटने और पैर फ्रेम में दिखने चाहिए — फ़ोन को पीछे करें",
+    voiceEn: "Move back",
+    voiceHi: "पीछे हटें",
+  },
   moveCloser: {
     en: "Move a little closer so the camera sees you clearly",
     hi: "थोड़ा पास आएं ताकि कैमरा आपको साफ़ देख सके",
@@ -126,6 +133,24 @@ export const FEEDBACK_MESSAGES = {
     hi: "कैमरे के सामने सीधे खड़े हों। फ़ोन को इस तरह रखें कि सिर, हाथ और पैर — सभी फ्रेम में दिखें।",
     voiceEn: "Face the camera",
     voiceHi: "कैमरे के सामने खड़े हों",
+  },
+  letsGetStarted: {
+    en: "Let's get started in…",
+    hi: "चलिए शुरू करते हैं…",
+    voiceEn: "Let's get started in",
+    voiceHi: "चलिए शुरू करते हैं",
+  },
+  goCue: {
+    en: "Go!",
+    hi: "शुरू!",
+    voiceEn: "Go",
+    voiceHi: "शुरू",
+  },
+  cameraSetupTipLowerBody: {
+    en: "Lie side-on to the camera. Prop your phone so your hips, knees and feet are in frame — your head doesn't need to be.",
+    hi: "कैमरे के सामने बग़ल में लेटें। फ़ोन को इस तरह रखें कि कूल्हे, घुटने और पैर फ्रेम में दिखें — सिर का दिखना ज़रूरी नहीं।",
+    voiceEn: "Lie side-on to the camera",
+    voiceHi: "बग़ल में लेटें",
   },
   cameraSetupTipSide: {
     en: "Lie down side-on to the camera. Prop your phone so your head, hands, and feet are all in frame.",

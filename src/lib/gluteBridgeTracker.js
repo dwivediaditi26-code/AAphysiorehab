@@ -5,7 +5,10 @@
  * Assumes a SIDE-ON camera, patient supine, knees bent, feet flat.
  * Signal (hipExtensionSignal.js): near-side shoulder-hip-knee angle,
  * aspect-corrected, median-filtered, measured relative to THIS patient's own
- * resting angle. 0 = resting, 1 = full extension (~170 deg).
+ * resting angle. 0 = resting, 1 = full extension (~170 deg). When the
+ * shoulder isn't reliably in frame (phone close / portrait) the same 0..1
+ * comes from the pelvis and thigh alone (pelvicLiftSignal.js), so the
+ * exercise needs only the pelvis and lower limb on camera.
  *
  * Reference from a real clip (studio demo, MediaPipe Pose Full): rest
  * 125 deg (122-130), lift 0.55 s, hold 178 deg +/- 1.3. Numbers below are
@@ -72,7 +75,7 @@ export function createGluteBridgeTracker(config = {}) {
       const r = signal.process(landmarks, meta);
       s.valid = r.valid; s.calibrated = r.calibrated; s.side = r.side ?? s.side;
       if (!r.valid) return s;        // bad frame: skip it entirely, never guess
-      s.angle = r.angle;
+      if (r.angle !== undefined) s.angle = r.angle;  // only the torso reference has a joint angle
 
       const ext = r.ext;
       const wasActive = counter.isActive();
@@ -95,7 +98,7 @@ export function createGluteBridgeTracker(config = {}) {
         else if (s.topSince !== null) { s.topMs += now - s.topSince; s.topSince = null; }
       } else {
         s.history.length = 0;
-        signal.relaxRest(r.angle);
+        signal.relaxRest(r.raw);
       }
       s.lastExt = ext;
 
@@ -123,6 +126,8 @@ export function createGluteBridgeTracker(config = {}) {
     getExtension() { return s.lastExt; },
     /** 'calibrating' until the patient's resting angle has been measured. */
     getStatusHint() { return s.calibrated ? null : "calibrating"; },
+    /** 'torso' (shoulder-hip-knee angle) or 'lowerBody' (pelvis rise) — see hipExtensionSignal.js. */
+    getSignalReference() { return signal.getReference(); },
     getLastRepStats() { return s.lastRep; },
     getFeedback() {
       const out = [];

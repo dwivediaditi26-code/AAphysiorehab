@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { X, Pause, Play, AlertTriangle, VolumeX } from "lucide-react";
 import { parseRepsTarget } from "../../lib/helpers.js";
-import { createPoseQuality } from "../../lib/poseQuality.js";
+import { createLiveSession } from "../../lib/liveSession.js";
 import { getLandmarker } from "../../lib/landmarker.js";
 import { FEEDBACK_MESSAGES as M } from "../../lib/feedbackMessages.js";
-import { TRACKER_CAMERA_ORIENTATION } from "../../lib/trackedExercises.js";
+import { TRACKER_CAMERA_ORIENTATION, TRACKER_FRAMING_REGION } from "../../lib/trackedExercises.js";
 import { createVoiceCoach } from "../../lib/voiceCoach.js";
 import { numberWord } from "../../lib/numberWords.js";
 
@@ -32,12 +32,13 @@ import { numberWord } from "../../lib/numberWords.js";
  */
 
 // Which message to show/speak for each stable framing problem (see poseQuality.js).
-const FRAMING_MESSAGE = {
+// The 'lower' region (bridging) names what it actually needs: hips, knees and feet.
+const framingMessages = (region) => ({
   no_person: M.noPersonDetected,
-  cut_off: M.moveBackFullBody,
+  cut_off: region === "lower" ? M.moveBackLowerBody : M.moveBackFullBody,
   too_small: M.moveCloser,
   low_confidence: M.lowConfidence,
-};
+});
 
 const CONNECTIONS = [
   [11, 12], [11, 23], [12, 24], [23, 24],
@@ -49,21 +50,24 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
-  const trackerRef = useRef(trackerFactory());
   const rafRef = useRef(null);
   const startRef = useRef(null);
   const voiceCoachRef = useRef(createVoiceCoach());
-  const prevRepsRef = useRef(0);
   const orientation = TRACKER_CAMERA_ORIENTATION[ex.id] || "frontal";
-  // Smoothing + framing verdict + "armed" latch — one instance per session.
-  const qualityRef = useRef(null);
-  if (!qualityRef.current) qualityRef.current = createPoseQuality({ orientation });
-  const armedAtRef = useRef(null);
+  // What must be in frame: 'lower' (pelvis + lower limb) for bridging, else the near-side body.
+  const region = TRACKER_FRAMING_REGION[ex.id] || "whole";
+  const FRAMING_MESSAGE = framingMessages(region);
+  const targetReps = parseRepsTarget(prescribed ? prescribed.reps : ex.reps);
+  // Smoothing + framing verdict + "Let's get started in 3, 2, 1" + tracker — one instance per session.
+  const sessionRef = useRef(null);
+  if (!sessionRef.current) sessionRef.current = createLiveSession({ trackerFactory, orientation, region, targetReps });
   // finish() runs from inside the camera loop, whose closure is frozen at the
   // render the effect started in — so it must read live values from refs, not state.
   const repsRef = useRef(0);
   const elapsedRef = useRef(0);
-  const setupTip = orientation === "side" ? M.cameraSetupTipSide : M.cameraSetupTipFrontal;
+  const setupTip = region === "lower"
+    ? M.cameraSetupTipLowerBody
+    : orientation === "side" ? M.cameraSetupTipSide : M.cameraSetupTipFrontal;
 
   const [status, setStatus] = useState("loading"); // loading | ready | denied | error
   const [running, setRunning] = useState(true);
@@ -72,13 +76,13 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
   const [feedback, setFeedback] = useState([]);
   // Stable (debounced) framing status: initializing | ok | no_person | cut_off | too_small | low_confidence
   const [framing, setFraming] = useState("initializing");
-  const [armed, setArmed] = useState(false); // counting starts only once the setup has been good for a moment
+  const [armed, setArmed] = useState(false); // the camera has seen a good setup
+  const [countdown, setCountdown] = useState(null); // 3 | 2 | 1 while "Let's get started in…" runs, else null
+  const [started, setStarted] = useState(false);    // counting begins only after the countdown ("Go")
   const [hint, setHint] = useState(null);    // e.g. 'calibrating'
 
   const [voiceOn, setVoiceOn] = useState(voiceCoachRef.current.isSupported());
   const [voiceLang, setVoiceLang] = useState("en"); // 'en' | 'hi'
-
-  const targetReps = parseRepsTarget(prescribed ? prescribed.reps : ex.reps);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,54 +128,31 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
             const rawLandmarks = result.landmarks && result.landmarks[0];
             consecutiveErrors = 0;
 
-            // Smooth + glitch-guard the landmarks, judge framing, latch "armed".
-            const q = qualityRef.current.process(rawLandmarks, nowMs);
-            drawOverlay(canvas, video, q.landmarks);
-            setFraming(q.framing.status);
-            setArmed(q.armed);
-
-            let repJustCompleted = false;
-            if (q.trackable && q.armed) {
-              if (!armedAtRef.current) armedAtRef.current = nowMs;
-              const tracker = trackerRef.current;
-              tracker.processFrame(q.landmarks, nowMs, { aspect: video.videoWidth / video.videoHeight });
-              const count = tracker.getRepCount();
-              const currentFeedback = tracker.getFeedback();
-              repsRef.current = count;
-              setReps(count);
-              setFeedback(currentFeedback);
-              setHint(tracker.getStatusHint ? tracker.getStatusHint() : null);
-              elapsedRef.current = Math.floor((nowMs - armedAtRef.current) / 1000);
-              setElapsed(elapsedRef.current);
-
-              repJustCompleted = count > prevRepsRef.current;
-              prevRepsRef.current = count;
-
-              if (repJustCompleted) {
-                // Always announce the count out loud on every completed rep —
-                // the whole point if you're not looking at the screen. Fold in
-                // a correction too when one's active that rep, same utterance.
-                const num = numberWord(count, "en"), numHi = numberWord(count, "hi");
-                const primary = q.framing.status === "ok" ? currentFeedback[0] : null;
-                const hasCorrection = primary && !primary.good;
-                const announcement = hasCorrection
-                  ? { voiceEn: `${num}. ${primary.voiceEn}`, voiceHi: `${numHi}. ${primary.voiceHi}` }
-                  : { voiceEn: num, voiceHi: numHi };
-                voiceCoachRef.current.speak(announcement, `rep-${count}`);
-              }
-
-              if (count >= targetReps) {
-                finish();
-                return;
-              }
+            // One call does smoothing, framing, the "Let's get started in 3, 2, 1"
+            // countdown and the tracker (liveSession.js). Nothing counts until Go.
+            const r = sessionRef.current.process(rawLandmarks, nowMs, { aspect: video.videoWidth / video.videoHeight });
+            drawOverlay(canvas, video, r.landmarks);
+            setFraming(r.framing.status);
+            setArmed(r.armed);
+            setCountdown(r.countdown);
+            setStarted(r.started);
+            if (r.started) {
+              repsRef.current = r.reps;
+              elapsedRef.current = r.elapsed;
+              setReps(r.reps);
+              setFeedback(r.feedback);
+              setHint(r.hint);
+              setElapsed(r.elapsed);
             }
 
-            // Framing prompts are debounced + capped in poseQuality.js
-            // (needs ~1.5 s of a real problem; max 3 spoken, >= 15 s apart),
+            // Speak what happened this frame. Framing prompts are already debounced
+            // + capped (needs ~1.5 s of a real problem; max 3 spoken, >= 15 s apart),
             // so a single bad frame can no longer nag "move back".
-            if (q.framing.speak && !repJustCompleted) {
-              const msg = FRAMING_MESSAGE[q.framing.status];
-              if (msg) voiceCoachRef.current.speak(msg, `framing-${q.framing.status}`);
+            for (const ev of r.events) speakEvent(ev);
+
+            if (r.finished) {
+              finish();
+              return;
             }
           } catch (err) {
             consecutiveErrors++;
@@ -203,6 +184,34 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
   useEffect(() => {
     voiceCoachRef.current.setLanguage(voiceLang);
   }, [voiceLang]);
+
+  // Turn a liveSession event into speech (see liveSession.js for the event list).
+  function speakEvent(ev) {
+    const voice = voiceCoachRef.current;
+    if (ev.type === "countdown") {
+      const n = { voiceEn: numberWord(ev.number, "en"), voiceHi: numberWord(ev.number, "hi") };
+      // The first number is spoken as "Let's get started in three"; then just "Two", "One".
+      const msg = ev.announce === "start"
+        ? { voiceEn: `${M.letsGetStarted.voiceEn} ${n.voiceEn}`, voiceHi: `${M.letsGetStarted.voiceHi}, ${n.voiceHi}` }
+        : n;
+      voice.speak(msg, `countdown-${ev.number}`);
+    } else if (ev.type === "go") {
+      voice.speak(M.goCue, "countdown-go");
+    } else if (ev.type === "rep") {
+      // Always announce the count out loud on every completed rep — the whole
+      // point if you're not looking at the screen. Fold in a correction too when
+      // one's active that rep, same utterance.
+      const num = numberWord(ev.count, "en"), numHi = numberWord(ev.count, "hi");
+      const c = ev.correction;
+      voice.speak(
+        c ? { voiceEn: `${num}. ${c.voiceEn}`, voiceHi: `${numHi}. ${c.voiceHi}` } : { voiceEn: num, voiceHi: numHi },
+        `rep-${ev.count}`
+      );
+    } else if (ev.type === "framing") {
+      const msg = FRAMING_MESSAGE[ev.status];
+      if (msg) voice.speak(msg, `framing-${ev.status}`);
+    }
+  }
 
   function drawOverlay(canvas, video, landmarks) {
     const ctx = canvas.getContext("2d");
@@ -244,7 +253,7 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
       sets: prescribed ? prescribed.sets : ex.sets,
       duration: elapsedRef.current,
       reps: repsRef.current,
-      formFeedback: trackerRef.current.getFeedback(),
+      formFeedback: sessionRef.current.tracker.getFeedback(),
     });
   }
 
@@ -346,7 +355,22 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
           </div>
         )}
 
-        {status === "ready" && armed && !FRAMING_MESSAGE[framing] && hint === "calibrating" && reps === 0 && (
+        {/* The camera can see you: "Let's get started in 3, 2, 1". Nothing counts until Go. */}
+        {status === "ready" && armed && !started && countdown !== null && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-white text-center">
+            <span className="bg-black/60 text-sm px-4 py-2 rounded-full mb-2">{M.letsGetStarted.en}</span>
+            <span className="text-[7rem] leading-none font-bold drop-shadow-lg">{countdown}</span>
+            <span className="text-xs text-gray-200 mt-2" lang="hi">{M.letsGetStarted.hi}</span>
+          </div>
+        )}
+
+        {status === "ready" && started && elapsed === 0 && reps === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span className="text-7xl font-bold text-white drop-shadow-lg">{M.goCue.en}</span>
+          </div>
+        )}
+
+        {status === "ready" && started && !FRAMING_MESSAGE[framing] && hint === "calibrating" && reps === 0 && (
           <div className="absolute bottom-3 left-3 right-3 bg-black/60 text-white text-xs px-3 py-2 rounded-xl text-center">
             <span className="block">{M.holdStill.en}</span>
             <span className="block text-gray-300" lang="hi">{M.holdStill.hi}</span>
