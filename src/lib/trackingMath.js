@@ -25,6 +25,28 @@ export function angleAt(a, b, c) {
   return (Math.acos(cosA) * 180) / Math.PI;
 }
 
+/**
+ * Aspect-corrected angle at vertex b. MediaPipe landmarks are normalized
+ * PER AXIS (x by image width, y by image height), so on a 16:9 frame one
+ * unit of x is ~1.8x longer than one unit of y and plain angleAt() bends
+ * every angle (a true 90 degree joint can read 70-110). Multiplying x by
+ * width/height puts both axes in the same unit before measuring.
+ * `aspect` = videoWidth / videoHeight; falls back to angleAt() when absent.
+ */
+export function angleAtAspect(a, b, c, aspect) {
+  if (!aspect || !isFinite(aspect)) return angleAt(a, b, c);
+  const s = (p) => ({ x: p.x * aspect, y: p.y });
+  return angleAt(s(a), s(b), s(c));
+}
+
+/** Median of a numeric array (does not mutate). */
+export function median(values) {
+  if (!values.length) return 0;
+  const v = [...values].sort((x, y) => x - y);
+  const m = v.length >> 1;
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+}
+
 // Landmarks that should all be visible for a useful side-on, whole-body shot:
 // nose, shoulders, wrists, hips, knees, ankles. Used only for the "reposition
 // yourself" nudge — NOT as a hard gate on tracking itself (see hasMinimalPose
@@ -34,9 +56,12 @@ export function angleAt(a, b, c) {
 const FRAMING_LANDMARKS = [0, 11, 12, 15, 16, 23, 24, 25, 26, 27, 28];
 
 /**
- * True when every landmark needed to see the whole body is present and
- * reasonably confident. Drives the on-screen/voice "move back" nudge —
- * informational, not a blocker.
+ * @deprecated Do not use for the "move back" nudge. It demands visibility
+ * >= 0.5 on BOTH sides plus wrists, but in any side-on view the far-side
+ * knee/ankle/wrist are occluded and score < 0.5 even in a perfectly framed
+ * shot, so it reported "move back" on 100% of frames of a real clip. Use
+ * assessFraming() in poseQuality.js (checks the near-side chain is inside
+ * the frame). Kept only so old imports don't break.
  */
 export function isWholeBodyInFrame(landmarks, threshold = 0.5) {
   if (!landmarks) return false;
@@ -48,19 +73,34 @@ export function isWholeBodyInFrame(landmarks, threshold = 0.5) {
   });
 }
 
-// Shoulders + hips only — the torso, which is visible in nearly any camera
-// setup where a person is roughly in frame at all. This is the actual gate
-// on whether tracking runs: low bar on purpose, since every tracker's signal
-// is computed from angles/distances involving these points regardless of
-// whether hands or feet happen to be in frame at a given instant.
-const MINIMAL_LANDMARKS = [11, 12, 23, 24];
+// Shoulder + hip on AT LEAST ONE side. Lying side-on (or any side view) the
+// far shoulder/hip are often hidden behind the body, and requiring both
+// sides made tracking flicker to "can't see you" for no real reason.
+// Low bar on purpose: every tracker's signal is computed from these torso
+// points; finer per-exercise gating happens in the tracker itself.
+const SIDE_TORSO = [[11, 23], [12, 24]];
 
 export function hasMinimalPose(landmarks, threshold = 0.3) {
   if (!landmarks) return false;
-  return MINIMAL_LANDMARKS.every((i) => {
-    const p = landmarks[i];
-    if (!p) return false;
-    const visibility = p.visibility ?? 1;
-    return visibility >= threshold;
-  });
+  return SIDE_TORSO.some((pair) =>
+    pair.every((i) => {
+      const p = landmarks[i];
+      return !!p && (p.visibility ?? 1) >= threshold;
+    })
+  );
+}
+
+// Hip + knee on AT LEAST ONE side: the pelvis and a lower limb. The minimal
+// pose for exercises tracked from the pelvis down (bridging), where the head
+// and shoulders are routinely out of frame because the phone is close.
+const SIDE_LEG = [[23, 25], [24, 26]];
+
+export function hasLowerBody(landmarks, threshold = 0.3) {
+  if (!landmarks) return false;
+  return SIDE_LEG.some((pair) =>
+    pair.every((i) => {
+      const p = landmarks[i];
+      return !!p && (p.visibility ?? 1) >= threshold;
+    })
+  );
 }

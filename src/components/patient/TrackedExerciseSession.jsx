@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { X, Pause, Play, AlertTriangle, VolumeX } from "lucide-react";
 import { parseRepsTarget } from "../../lib/helpers.js";
-import { isWholeBodyInFrame, hasMinimalPose } from "../../lib/trackingMath.js";
+import { createLiveSession } from "../../lib/liveSession.js";
+import { getLandmarker } from "../../lib/landmarker.js";
 import { FEEDBACK_MESSAGES as M } from "../../lib/feedbackMessages.js";
-import { TRACKER_CAMERA_ORIENTATION } from "../../lib/trackedExercises.js";
+import { TRACKER_CAMERA_ORIENTATION, TRACKER_FRAMING_REGION } from "../../lib/trackedExercises.js";
 import { createVoiceCoach } from "../../lib/voiceCoach.js";
 import { numberWord } from "../../lib/numberWords.js";
 
@@ -30,29 +31,14 @@ import { numberWord } from "../../lib/numberWords.js";
  * FilesetResolver.forVisionTasks(...) at your own paths instead.
  */
 
-// Cache the vision fileset + landmarker across sessions so re-opening an exercise
-// doesn't reload the ~ several-MB wasm/model payload every time.
-let landmarkerPromise = null;
-async function getLandmarker() {
-  if (!landmarkerPromise) {
-    landmarkerPromise = (async () => {
-      const { FilesetResolver, PoseLandmarker } = await import("@mediapipe/tasks-vision");
-      const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm"
-      );
-      return PoseLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath:
-            "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-          delegate: "CPU",
-        },
-        runningMode: "VIDEO",
-        numPoses: 1,
-      });
-    })();
-  }
-  return landmarkerPromise;
-}
+// Which message to show/speak for each stable framing problem (see poseQuality.js).
+// The 'lower' region (bridging) names what it actually needs: hips, knees and feet.
+const framingMessages = (region) => ({
+  no_person: M.noPersonDetected,
+  cut_off: region === "lower" ? M.moveBackLowerBody : M.moveBackFullBody,
+  too_small: M.moveCloser,
+  low_confidence: M.lowConfidence,
+});
 
 const CONNECTIONS = [
   [11, 12], [11, 23], [12, 24], [23, 24],
@@ -64,25 +50,39 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
-  const trackerRef = useRef(trackerFactory());
   const rafRef = useRef(null);
   const startRef = useRef(null);
   const voiceCoachRef = useRef(createVoiceCoach());
-  const prevRepsRef = useRef(0);
   const orientation = TRACKER_CAMERA_ORIENTATION[ex.id] || "frontal";
-  const setupTip = orientation === "side" ? M.cameraSetupTipSide : M.cameraSetupTipFrontal;
+  // What must be in frame: 'lower' (pelvis + lower limb) for bridging, else the near-side body.
+  const region = TRACKER_FRAMING_REGION[ex.id] || "whole";
+  const FRAMING_MESSAGE = framingMessages(region);
+  const targetReps = parseRepsTarget(prescribed ? prescribed.reps : ex.reps);
+  // Smoothing + framing verdict + "Let's get started in 3, 2, 1" + tracker — one instance per session.
+  const sessionRef = useRef(null);
+  if (!sessionRef.current) sessionRef.current = createLiveSession({ trackerFactory, orientation, region, targetReps });
+  // finish() runs from inside the camera loop, whose closure is frozen at the
+  // render the effect started in — so it must read live values from refs, not state.
+  const repsRef = useRef(0);
+  const elapsedRef = useRef(0);
+  const setupTip = region === "lower"
+    ? M.cameraSetupTipLowerBody
+    : orientation === "side" ? M.cameraSetupTipSide : M.cameraSetupTipFrontal;
 
   const [status, setStatus] = useState("loading"); // loading | ready | denied | error
   const [running, setRunning] = useState(true);
   const [reps, setReps] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [feedback, setFeedback] = useState([]);
-  const [framingOk, setFramingOk] = useState(true);
-  const [personVisible, setPersonVisible] = useState(true);
+  // Stable (debounced) framing status: initializing | ok | no_person | cut_off | too_small | low_confidence
+  const [framing, setFraming] = useState("initializing");
+  const [armed, setArmed] = useState(false); // the camera has seen a good setup
+  const [countdown, setCountdown] = useState(null); // 3 | 2 | 1 while "Let's get started in…" runs, else null
+  const [started, setStarted] = useState(false);    // counting begins only after the countdown ("Go")
+  const [hint, setHint] = useState(null);    // e.g. 'calibrating'
+
   const [voiceOn, setVoiceOn] = useState(voiceCoachRef.current.isSupported());
   const [voiceLang, setVoiceLang] = useState("en"); // 'en' | 'hi'
-
-  const targetReps = parseRepsTarget(prescribed ? prescribed.reps : ex.reps);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,56 +112,47 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
 
     function loop(landmarker) {
       let consecutiveErrors = 0;
+      let lastVideoTime = -1;
       function frame() {
         if (cancelled) return;
         const video = videoRef.current;
         const canvas = canvasRef.current;
-        if (video && canvas && video.readyState >= 2 && running) {
+        // Only run the model on NEW video frames. rAF fires at the display
+        // rate (60-120 Hz) but the camera delivers ~30; re-running on the same
+        // frame wastes CPU/battery for identical landmarks.
+        if (video && canvas && video.readyState >= 2 && running && video.currentTime !== lastVideoTime) {
+          lastVideoTime = video.currentTime;
           try {
-            const now = performance.now();
-            const result = landmarker.detectForVideo(video, now);
-            const landmarks = result.landmarks && result.landmarks[0];
+            const nowMs = Date.now();
+            const result = landmarker.detectForVideo(video, performance.now());
+            const rawLandmarks = result.landmarks && result.landmarks[0];
             consecutiveErrors = 0;
 
-            drawOverlay(canvas, video, landmarks);
+            // One call does smoothing, framing, the "Let's get started in 3, 2, 1"
+            // countdown and the tracker (liveSession.js). Nothing counts until Go.
+            const r = sessionRef.current.process(rawLandmarks, nowMs, { aspect: video.videoWidth / video.videoHeight });
+            drawOverlay(canvas, video, r.landmarks);
+            setFraming(r.framing.status);
+            setArmed(r.armed);
+            setCountdown(r.countdown);
+            setStarted(r.started);
+            if (r.started) {
+              repsRef.current = r.reps;
+              elapsedRef.current = r.elapsed;
+              setReps(r.reps);
+              setFeedback(r.feedback);
+              setHint(r.hint);
+              setElapsed(r.elapsed);
+            }
 
-            const trackable = hasMinimalPose(landmarks);
-            const fullyFramed = isWholeBodyInFrame(landmarks);
-            setFramingOk(fullyFramed);
-            setPersonVisible(trackable);
+            // Speak what happened this frame. Framing prompts are already debounced
+            // + capped (needs ~1.5 s of a real problem; max 3 spoken, >= 15 s apart),
+            // so a single bad frame can no longer nag "move back".
+            for (const ev of r.events) speakEvent(ev);
 
-            if (trackable) {
-              trackerRef.current.processFrame(landmarks, Date.now());
-              const count = trackerRef.current.getRepCount();
-              const currentFeedback = trackerRef.current.getFeedback();
-              setReps(count);
-              setFeedback(currentFeedback);
-              setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
-
-              const repJustCompleted = count > prevRepsRef.current;
-              prevRepsRef.current = count;
-
-              if (repJustCompleted) {
-                // Always announce the count out loud on every completed rep —
-                // the whole point if you're not looking at the screen. Fold in
-                // a correction too when one's active that rep, same utterance.
-                const num = numberWord(count, "en"), numHi = numberWord(count, "hi");
-                const primary = fullyFramed ? currentFeedback[0] : null;
-                const hasCorrection = primary && !primary.good;
-                const announcement = hasCorrection
-                  ? { voiceEn: `${num}. ${primary.voiceEn}`, voiceHi: `${numHi}. ${primary.voiceHi}` }
-                  : { voiceEn: num, voiceHi: numHi };
-                voiceCoachRef.current.speak(announcement, `rep-${count}`);
-              } else if (!fullyFramed) {
-                voiceCoachRef.current.speak(M.moveBackFullBody, "moveBack");
-              }
-
-              if (count >= targetReps) {
-                finish();
-                return;
-              }
-            } else {
-              voiceCoachRef.current.speak(M.noPersonDetected, "noPerson");
+            if (r.finished) {
+              finish();
+              return;
             }
           } catch (err) {
             consecutiveErrors++;
@@ -194,6 +185,34 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
     voiceCoachRef.current.setLanguage(voiceLang);
   }, [voiceLang]);
 
+  // Turn a liveSession event into speech (see liveSession.js for the event list).
+  function speakEvent(ev) {
+    const voice = voiceCoachRef.current;
+    if (ev.type === "countdown") {
+      const n = { voiceEn: numberWord(ev.number, "en"), voiceHi: numberWord(ev.number, "hi") };
+      // The first number is spoken as "Let's get started in three"; then just "Two", "One".
+      const msg = ev.announce === "start"
+        ? { voiceEn: `${M.letsGetStarted.voiceEn} ${n.voiceEn}`, voiceHi: `${M.letsGetStarted.voiceHi}, ${n.voiceHi}` }
+        : n;
+      voice.speak(msg, `countdown-${ev.number}`);
+    } else if (ev.type === "go") {
+      voice.speak(M.goCue, "countdown-go");
+    } else if (ev.type === "rep") {
+      // Always announce the count out loud on every completed rep — the whole
+      // point if you're not looking at the screen. Fold in a correction too when
+      // one's active that rep, same utterance.
+      const num = numberWord(ev.count, "en"), numHi = numberWord(ev.count, "hi");
+      const c = ev.correction;
+      voice.speak(
+        c ? { voiceEn: `${num}. ${c.voiceEn}`, voiceHi: `${numHi}. ${c.voiceHi}` } : { voiceEn: num, voiceHi: numHi },
+        `rep-${ev.count}`
+      );
+    } else if (ev.type === "framing") {
+      const msg = FRAMING_MESSAGE[ev.status];
+      if (msg) voice.speak(msg, `framing-${ev.status}`);
+    }
+  }
+
   function drawOverlay(canvas, video, landmarks) {
     const ctx = canvas.getContext("2d");
     canvas.width = video.videoWidth;
@@ -205,18 +224,21 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
     ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     if (landmarks) {
-      ctx.strokeStyle = "#7C3AED";
+      // Low-visibility joints are the model GUESSING (e.g. the far leg hidden
+      // behind the near one) — draw them faint so nobody reads them as fact.
+      const conf = (p) => (p && (p.visibility ?? 1) >= 0.5);
       ctx.lineWidth = 4;
       CONNECTIONS.forEach(([a, b]) => {
         const p1 = landmarks[a], p2 = landmarks[b];
         if (!p1 || !p2) return;
+        ctx.strokeStyle = conf(p1) && conf(p2) ? "#7C3AED" : "rgba(124,58,237,0.25)";
         ctx.beginPath();
         ctx.moveTo(p1.x * canvas.width, p1.y * canvas.height);
         ctx.lineTo(p2.x * canvas.width, p2.y * canvas.height);
         ctx.stroke();
       });
-      ctx.fillStyle = "#7C3AED";
       landmarks.forEach((p) => {
+        ctx.fillStyle = conf(p) ? "#7C3AED" : "rgba(124,58,237,0.25)";
         ctx.beginPath();
         ctx.arc(p.x * canvas.width, p.y * canvas.height, 5, 0, Math.PI * 2);
         ctx.fill();
@@ -229,9 +251,9 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
     if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
     onFinish({
       sets: prescribed ? prescribed.sets : ex.sets,
-      duration: elapsed,
-      reps,
-      formFeedback: trackerRef.current.getFeedback(),
+      duration: elapsedRef.current,
+      reps: repsRef.current,
+      formFeedback: sessionRef.current.tracker.getFeedback(),
     });
   }
 
@@ -314,21 +336,48 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
           </div>
         )}
 
-        {status === "ready" && !personVisible && (
-          <div className="absolute bottom-3 left-3 right-3 bg-rose-600/90 text-white text-xs px-3 py-2 rounded-xl text-center">
-            <span className="block font-medium">{M.noPersonDetected.en}</span>
-            <span className="block" lang="hi">{M.noPersonDetected.hi}</span>
+        {/* Not armed yet: nothing is counted until the camera sees you clearly. */}
+        {status === "ready" && !armed && (
+          <div className="absolute bottom-3 left-3 right-3 bg-black/70 text-white text-xs px-3 py-2 rounded-xl text-center">
+            <span className="block font-medium">{M.getInPosition.en}</span>
+            <span className="block text-gray-300" lang="hi">{M.getInPosition.hi}</span>
+            {FRAMING_MESSAGE[framing] && (
+              <span className="block mt-1 text-amber-300">{FRAMING_MESSAGE[framing].en}</span>
+            )}
           </div>
         )}
 
-        {status === "ready" && personVisible && !framingOk && (
-          <div className="absolute bottom-3 left-3 right-3 bg-amber-600/90 text-white text-xs px-3 py-2 rounded-xl text-center">
-            <span className="block font-medium">{M.moveBackFullBody.en}</span>
-            <span className="block" lang="hi">{M.moveBackFullBody.hi}</span>
+        {/* Armed but the view has been bad for ~1.5 s (debounced — never a single-frame flash). */}
+        {status === "ready" && armed && FRAMING_MESSAGE[framing] && (
+          <div className={`absolute bottom-3 left-3 right-3 text-white text-xs px-3 py-2 rounded-xl text-center ${framing === "no_person" ? "bg-rose-600/90" : "bg-amber-600/90"}`}>
+            <span className="block font-medium">{FRAMING_MESSAGE[framing].en}</span>
+            <span className="block" lang="hi">{FRAMING_MESSAGE[framing].hi}</span>
           </div>
         )}
 
-        {status === "ready" && personVisible && framingOk && feedback.length > 0 && (
+        {/* The camera can see you: "Let's get started in 3, 2, 1". Nothing counts until Go. */}
+        {status === "ready" && armed && !started && countdown !== null && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-white text-center">
+            <span className="bg-black/60 text-sm px-4 py-2 rounded-full mb-2">{M.letsGetStarted.en}</span>
+            <span className="text-[7rem] leading-none font-bold drop-shadow-lg">{countdown}</span>
+            <span className="text-xs text-gray-200 mt-2" lang="hi">{M.letsGetStarted.hi}</span>
+          </div>
+        )}
+
+        {status === "ready" && started && elapsed === 0 && reps === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span className="text-7xl font-bold text-white drop-shadow-lg">{M.goCue.en}</span>
+          </div>
+        )}
+
+        {status === "ready" && started && !FRAMING_MESSAGE[framing] && hint === "calibrating" && reps === 0 && (
+          <div className="absolute bottom-3 left-3 right-3 bg-black/60 text-white text-xs px-3 py-2 rounded-xl text-center">
+            <span className="block">{M.holdStill.en}</span>
+            <span className="block text-gray-300" lang="hi">{M.holdStill.hi}</span>
+          </div>
+        )}
+
+        {status === "ready" && armed && !FRAMING_MESSAGE[framing] && hint !== "calibrating" && feedback.length > 0 && (
           <div className="absolute bottom-3 left-3 right-3 bg-black/60 text-white text-xs px-3 py-2 rounded-xl text-center">
             <span className="block">{feedback[0].en}</span>
             <span className="block text-gray-300" lang="hi">{feedback[0].hi}</span>

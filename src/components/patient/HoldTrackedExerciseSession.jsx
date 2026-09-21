@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { X, Pause, Play, AlertTriangle, VolumeX } from "lucide-react";
 import { parseHoldTargetMs } from "../../lib/helpers.js";
-import { isWholeBodyInFrame, hasMinimalPose } from "../../lib/trackingMath.js";
+import { createPoseQuality } from "../../lib/poseQuality.js";
+import { getLandmarker } from "../../lib/landmarker.js";
 import { FEEDBACK_MESSAGES as M } from "../../lib/feedbackMessages.js";
 import { TRACKER_CAMERA_ORIENTATION } from "../../lib/trackedExercises.js";
 import { createVoiceCoach } from "../../lib/voiceCoach.js";
@@ -21,27 +22,13 @@ import { numberWord } from "../../lib/numberWords.js";
  * session-complete screen doesn't need special-casing.
  */
 
-let landmarkerPromise = null;
-async function getLandmarker() {
-  if (!landmarkerPromise) {
-    landmarkerPromise = (async () => {
-      const { FilesetResolver, PoseLandmarker } = await import("@mediapipe/tasks-vision");
-      const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm"
-      );
-      return PoseLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath:
-            "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-          delegate: "CPU",
-        },
-        runningMode: "VIDEO",
-        numPoses: 1,
-      });
-    })();
-  }
-  return landmarkerPromise;
-}
+// Which message to show/speak for each stable framing problem (see poseQuality.js).
+const FRAMING_MESSAGE = {
+  no_person: M.noPersonDetected,
+  cut_off: M.moveBackFullBody,
+  too_small: M.moveCloser,
+  low_confidence: M.lowConfidence,
+};
 
 const CONNECTIONS = [
   [11, 12], [11, 23], [12, 24], [23, 24],
@@ -62,6 +49,9 @@ export default function HoldTrackedExerciseSession({ ex, prescribed, trackerFact
   const lastAnnouncedSecRef = useRef(0);
   const orientation = TRACKER_CAMERA_ORIENTATION[ex.id] || "side";
   const setupTip = orientation === "side" ? M.cameraSetupTipSide : M.cameraSetupTipFrontal;
+  // Smoothing + debounced framing verdict (near-side chain, no far-limb nagging).
+  const qualityRef = useRef(null);
+  if (!qualityRef.current) qualityRef.current = createPoseQuality({ orientation });
 
   const [status, setStatus] = useState("loading");
   const [running, setRunning] = useState(true);
@@ -70,8 +60,7 @@ export default function HoldTrackedExerciseSession({ ex, prescribed, trackerFact
   const [isHolding, setIsHolding] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [feedback, setFeedback] = useState([]);
-  const [framingOk, setFramingOk] = useState(true);
-  const [personVisible, setPersonVisible] = useState(true);
+  const [framing, setFraming] = useState("initializing"); // stable: initializing | ok | no_person | cut_off | too_small | low_confidence
   const [voiceOn, setVoiceOn] = useState(voiceCoachRef.current.isSupported());
   const [voiceLang, setVoiceLang] = useState("en");
 
@@ -105,27 +94,32 @@ export default function HoldTrackedExerciseSession({ ex, prescribed, trackerFact
 
     function loop(landmarker) {
       let consecutiveErrors = 0;
+      let lastVideoTime = -1;
       function frame() {
         if (cancelled) return;
         const video = videoRef.current;
         const canvas = canvasRef.current;
-        if (video && canvas && video.readyState >= 2 && running) {
+        // Only run the model on NEW camera frames (rAF runs faster than the camera).
+        if (video && canvas && video.readyState >= 2 && running && video.currentTime !== lastVideoTime) {
+          lastVideoTime = video.currentTime;
           try {
-            const now = performance.now();
-            const result = landmarker.detectForVideo(video, now);
-            const landmarks = result.landmarks && result.landmarks[0];
+            const nowMs = Date.now();
+            const result = landmarker.detectForVideo(video, performance.now());
+            const rawLandmarks = result.landmarks && result.landmarks[0];
             consecutiveErrors = 0;
 
-            drawOverlay(canvas, video, landmarks);
+            const q = qualityRef.current.process(rawLandmarks, nowMs);
+            drawOverlay(canvas, video, q.landmarks);
+            setFraming(q.framing.status);
+            setElapsed(Math.floor((nowMs - startRef.current) / 1000));
 
-            const trackable = hasMinimalPose(landmarks);
-            const fullyFramed = isWholeBodyInFrame(landmarks);
-            setFramingOk(fullyFramed);
-            setPersonVisible(trackable);
-            setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
+            if (q.framing.speak) {
+              const msg = FRAMING_MESSAGE[q.framing.status];
+              if (msg) voiceCoachRef.current.speak(msg, `framing-${q.framing.status}`);
+            }
 
-            if (trackable) {
-              trackerRef.current.processFrame(landmarks, Date.now());
+            if (q.trackable) {
+              trackerRef.current.processFrame(q.landmarks, nowMs, { aspect: video.videoWidth / video.videoHeight });
               const holding = trackerRef.current.isHolding();
               const curElapsedMs = trackerRef.current.getElapsedMs();
               const completedHolds = trackerRef.current.getCompletedHolds();
@@ -156,16 +150,10 @@ export default function HoldTrackedExerciseSession({ ex, prescribed, trackerFact
               }
               wasHoldingRef.current = holding;
 
-              if (!holding && !fullyFramed) {
-                voiceCoachRef.current.speak(M.moveBackFullBody, "moveBack");
-              }
-
               if (completedHolds >= targetHolds) {
                 finish(completedHolds);
                 return;
               }
-            } else {
-              voiceCoachRef.current.speak(M.noPersonDetected, "noPerson");
             }
           } catch (err) {
             consecutiveErrors++;
@@ -318,21 +306,14 @@ export default function HoldTrackedExerciseSession({ ex, prescribed, trackerFact
           </div>
         )}
 
-        {status === "ready" && !personVisible && (
-          <div className="absolute bottom-3 left-3 right-3 bg-rose-600/90 text-white text-xs px-3 py-2 rounded-xl text-center">
-            <span className="block font-medium">{M.noPersonDetected.en}</span>
-            <span className="block" lang="hi">{M.noPersonDetected.hi}</span>
+        {status === "ready" && FRAMING_MESSAGE[framing] && !isHolding && (
+          <div className={`absolute bottom-3 left-3 right-3 text-white text-xs px-3 py-2 rounded-xl text-center ${framing === "no_person" ? "bg-rose-600/90" : "bg-amber-600/90"}`}>
+            <span className="block font-medium">{FRAMING_MESSAGE[framing].en}</span>
+            <span className="block" lang="hi">{FRAMING_MESSAGE[framing].hi}</span>
           </div>
         )}
 
-        {status === "ready" && personVisible && !framingOk && !isHolding && (
-          <div className="absolute bottom-3 left-3 right-3 bg-amber-600/90 text-white text-xs px-3 py-2 rounded-xl text-center">
-            <span className="block font-medium">{M.moveBackFullBody.en}</span>
-            <span className="block" lang="hi">{M.moveBackFullBody.hi}</span>
-          </div>
-        )}
-
-        {status === "ready" && personVisible && feedback.length > 0 && (framingOk || isHolding) && (
+        {status === "ready" && feedback.length > 0 && (!FRAMING_MESSAGE[framing] || isHolding) && (
           <div className="absolute bottom-3 left-3 right-3 bg-black/60 text-white text-xs px-3 py-2 rounded-xl text-center">
             <span className="block">{feedback[0].en}</span>
             <span className="block text-gray-300" lang="hi">{feedback[0].hi}</span>

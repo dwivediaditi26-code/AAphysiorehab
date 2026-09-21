@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { ArrowLeft, Video, Play, X, RotateCcw, Check, Smartphone, Timer } from "lucide-react";
 import { Pill } from "../ui/Atoms.jsx";
 import { getInstructions } from "../../data/seed.js";
-import { TRACKED_EXERCISE_COMPONENTS, HOLD_TRACKED_EXERCISES, TRACKER_CAMERA_ORIENTATION } from "../../lib/trackedExercises.js";
+import { TRACKED_EXERCISE_COMPONENTS, HOLD_TRACKED_EXERCISES, TRACKER_CAMERA_ORIENTATION, TRACKER_FRAMING_REGION } from "../../lib/trackedExercises.js";
 import { FEEDBACK_MESSAGES as M } from "../../lib/feedbackMessages.js";
 import { unlockSpeechSynthesis } from "../../lib/voiceCoach.js";
 
@@ -12,7 +12,9 @@ export function PatientExerciseDetail({ ex, prescribed, onBack, onStart }) {
   const isTracked = !!TRACKED_EXERCISE_COMPONENTS[ex.id];
   const isHoldTracked = !!HOLD_TRACKED_EXERCISES[ex.id];
   const orientation = TRACKER_CAMERA_ORIENTATION[ex.id];
-  const setupTip = orientation === "side" ? M.cameraSetupTipSide : M.cameraSetupTipFrontal;
+  const setupTip = TRACKER_FRAMING_REGION[ex.id] === "lower"
+    ? M.cameraSetupTipLowerBody
+    : orientation === "side" ? M.cameraSetupTipSide : M.cameraSetupTipFrontal;
   return (
     <div className="flex-1 flex flex-col">
       <div className="flex items-center gap-3 p-4 border-b border-gray-100 bg-white shrink-0">
