@@ -21,6 +21,18 @@
  *  4. Low-confidence frames are REPORTED as invalid (valid:false) rather than
  *     fed into the state machine — the tracker just skips them, so a bad
  *     frame can never invent or cancel a rep.
+ *  4b. NEAR SIDE IS LOCKED once the rest baseline is calibrated. Which side of
+ *     the body faces the camera is a property of the room, not something that
+ *     changes frame to frame — but before this fix chooseSide() re-picked it
+ *     on EVERY frame from instant visibility scores. Deliberately lifting a
+ *     leg (or any brief motion) makes that leg's joints momentarily much more
+ *     visible than the true near side and can flip `side` for good. The `rest`
+ *     baseline was calibrated for the OLD side's geometry, so after a flip the
+ *     angle computed from the NEW side's landmarks no longer relates to it —
+ *     `ext` can get stuck near 0 (never re-enters "active") or near 1 (never
+ *     returns below "exit"), and the tracker stops counting reps for the rest
+ *     of the session. Fix: choose the side freely only until the baseline is
+ *     calibrated, then freeze it for the session (reset() unfreezes it).
  *  5. TWO REFERENCES. The angle above needs the shoulder in frame. With the
  *     phone close or held portrait the head and shoulders are often out of
  *     shot, so when the shoulder is not reliably inside the image we measure
@@ -63,6 +75,7 @@ export function createHipExtensionSignal(config = {}) {
   let torsoLost = 0;
 
   let side = "left";
+  let sideLocked = false; // frozen once the rest baseline is calibrated — see header note 4b
   let rest = REST_DEFAULT;
   let calibrated = false;
   let framesSeen = 0;
@@ -86,6 +99,7 @@ export function createHipExtensionSignal(config = {}) {
   }
 
   function chooseSide(landmarks) {
+    if (sideLocked) return; // frozen — see header note 4b
     const score = (s) => Object.values(CHAIN[s]).reduce((t, i) => t + (landmarks[i].visibility ?? 1), 0);
     // hysteresis: only switch sides when the other is clearly better
     if (side === "left" && score("right") > score("left") + 0.3) side = "right";
@@ -133,6 +147,7 @@ export function createHipExtensionSignal(config = {}) {
         }
         if (!calibrated && framesSeen >= CAL_GIVE_UP) calibrated = true; // keep REST_DEFAULT
       }
+      if (calibrated) sideLocked = true;
 
       const target = Math.max(TARGET, rest + MIN_RANGE);
       const ext = clamp01((angle - rest) / (target - rest));
@@ -151,7 +166,7 @@ export function createHipExtensionSignal(config = {}) {
     /** 'torso' | 'lowerBody' | null (nothing seen yet). */
     getReference() { return reference; },
     reset() {
-      side = "left"; rest = REST_DEFAULT; calibrated = false; framesSeen = 0;
+      side = "left"; sideLocked = false; rest = REST_DEFAULT; calibrated = false; framesSeen = 0;
       raw.length = 0; recent.length = 0;
       pelvic.reset(); reference = null; torsoLost = 0;
     },
