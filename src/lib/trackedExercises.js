@@ -11,10 +11,12 @@
 // trackable for standing exercises specifically — sideways motion
 // (abduction) became reliable, forward motion (flexion, hinging) became
 // unreliable, since a frontal camera barely sees depth. hipHingeTracker.js
-// and shoulderFlexionTracker.js still exist (someone might use a side
-// camera for those specifically) but are deliberately left out of the
-// registry below: silently counting reps from an unreliable signal is worse
-// than an honest "no engine yet" badge.
+// still exists (someone might use a side camera for it specifically) but is
+// deliberately left out of the registry below: silently counting reps from
+// an unreliable signal is worse than an honest "no engine yet" badge.
+// shoulderFlexionTracker.js used to be excluded for the same reason but now
+// reads a real hip-shoulder-elbow joint angle (goniometry-adjacent, not a
+// distance heuristic — see its own header) from a SIDE camera, so it's in.
 import { createDeadBugTracker } from "./deadBugTracker.js";
 import { createGluteBridgeTracker } from "./gluteBridgeTracker.js";
 import { createBirdDogTracker } from "./birdDogTracker.js";
@@ -23,6 +25,7 @@ import { createSquatTracker } from "./squatTracker.js";
 import { createSitToStandTracker } from "./sitToStandTracker.js";
 import { createHeelRaiseTracker } from "./heelRaiseTracker.js";
 import { createShoulderAbductionTracker } from "./shoulderAbductionTracker.js";
+import { createShoulderFlexionTracker } from "./shoulderFlexionTracker.js";
 import { createHipAbductionTracker } from "./hipAbductionTracker.js";
 import { createSupermanTracker } from "./supermanTracker.js";
 import { createPronePressUpTracker } from "./pronePressUpTracker.js";
@@ -40,6 +43,7 @@ export const TRACKED_EXERCISE_COMPONENTS = {
   e15: createSitToStandTracker,         // Sit-to-Stand — standing, frontal
   e16: createHeelRaiseTracker,          // Heel Raises — standing, frontal
   e14: createShoulderAbductionTracker,  // Shoulder Abduction — standing, frontal
+  e13: createShoulderFlexionTracker,    // Shoulder Flexion — standing, side view
   e18: createHipAbductionTracker,       // Standing Hip Abduction — standing, frontal
   e22: createSupermanTracker,           // Superman — prone, side view
   e27: createPronePressUpTracker,       // Prone Press-Up — prone, side view
@@ -83,6 +87,7 @@ export const TRACKER_CAMERA_ORIENTATION = {
   e15: "frontal",
   e16: "frontal",
   e14: "frontal",
+  e13: "side",
   e18: "frontal",
   e22: "side",
   e27: "side",

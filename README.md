@@ -146,13 +146,29 @@ Camera tracking runs every landmark through `src/lib/poseQuality.js` and
   which is most floor exercises. Raise a hand above your head and it becomes
   a cursor on screen; hold it over Pause/Resume, Finish, or the X for ~1s to
   activate it, same as tapping. "Above the head" is a deliberately high bar —
-  well outside the range of motion of every tracked exercise today, so a
-  genuine rep can't be misread as a gesture (draft; validate before adding an
-  exercise with real overhead reach). Shared by both live tracking screens; a
-  header toggle turns it off. Only reaches the two screens where the camera
-  is already running — the pre-session "Start Exercise" button doesn't have
-  a camera active yet, so it isn't reachable this way without a bigger change
-  (starting the camera earlier).
+  clear of every tracked exercise's OWN completion threshold (Shoulder
+  Abduction/Flexion target ~90°, shoulder height, not overhead) — but a
+  patient who raises noticeably past what's prescribed could approach it;
+  draft, validate before adding an exercise with real overhead reach.
+  Shared by both live tracking screens; a header toggle turns it off. Only
+  reaches the two screens where the camera is already running — the
+  pre-session "Start Exercise" button doesn't have a camera active yet, so
+  it isn't reachable this way without a bigger change (starting the camera
+  earlier).
+- **Shoulder Abduction and Flexion read a real joint angle**
+  (`shoulderAbductionTracker.js`, `shoulderFlexionTracker.js`): hip-shoulder-
+  elbow, the same construction goniometry and the pose-estimation literature
+  both use for this joint (published 2D-pose studies using this exact
+  definition report ~9-13° mean error against 3D motion capture) — not the
+  previous horizontal-distance-from-shoulder heuristic. Abduction reads both
+  arms (frontal camera, frontal-plane movement); Flexion reads the near side
+  only (side camera, sagittal-plane movement) and is now registered
+  (`e13`) — it used to be built but deliberately left unregistered because
+  its old signal wasn't trustworthy enough, and it also still had the
+  pre-`repCounter.js` double-counting bug (a noisy frame crossing the exit
+  threshold with no debounce); both are fixed. Fixed-degree thresholds, not
+  per-patient calibrated like the bridge signal — a draft, not tuned per
+  body type or validated on real footage.
 - Model: Pose Landmarker **Full**, WASM pinned to the installed package version
   (`src/lib/landmarker.js`: keep `TASKS_VISION_VERSION` equal to
   `package-lock.json`), GPU delegate with CPU fallback.
