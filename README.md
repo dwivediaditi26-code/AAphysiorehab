@@ -119,6 +119,28 @@ Camera tracking runs every landmark through `src/lib/poseQuality.js` and
   nothing counts until Go. The resting baseline is measured while the patient
   lies still during the countdown. If the setup is lost mid-countdown it starts
   over from 3.
+- **Near side is locked once calibrated** (`hipExtensionSignal.js`,
+  `pelvicLiftSignal.js`). Which leg faces the camera used to be re-picked from
+  raw visibility on every single frame, so a brief but strongly asymmetric
+  movement — deliberately lifting the other leg, in one real report — could
+  flip which leg's landmarks fed the signal. The rest baseline had been
+  calibrated for the OLD leg's geometry, so after a flip the extension value
+  could get stuck near 0 or 1 and the tracker stopped counting reps for the
+  rest of the session. Now the side is chosen freely only until the baseline
+  calibrates, then frozen for the session (`reset()` unfreezes it).
+- **Glute Bridge flags a lifted leg** (`gluteBridgeTracker.js`): the near-side
+  knee angle is compared to where it was when the current rep started; a
+  straightening well past that (a leg lifting/extending, not a two-leg bridge)
+  still counts the rep — the hips did rise — but says "keep your knee bent"
+  instead of "Good". Draft threshold from one clip with no real
+  "lifted-a-leg" footage; won't catch a bent-knee march (knee angle roughly
+  unchanged, whole leg lifts).
+- **repCounter self-heal watchdog** (`repCounter.js`): if "active" ever
+  persists implausibly long (default 45 s — generous enough that no
+  legitimate slow, controlled rep should ever hit it) without the signal
+  returning, the counter abandons that attempt (no rep credited) and goes
+  back to idle, so a genuinely stuck signal — from this or any other cause —
+  can't leave the app silently not counting for the rest of the session.
 - Model: Pose Landmarker **Full**, WASM pinned to the installed package version
   (`src/lib/landmarker.js`: keep `TASKS_VISION_VERSION` equal to
   `package-lock.json`), GPU delegate with CPU fallback.

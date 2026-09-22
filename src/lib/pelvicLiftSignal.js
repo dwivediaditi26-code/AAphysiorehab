@@ -22,7 +22,10 @@
  * Same contract as hipExtensionSignal.js — 0 = resting, 1 = full lift; a
  * per-patient rest baseline measured while the patient is still; median
  * filter; low-confidence frames reported invalid so a bad frame can never
- * invent or cancel a rep.
+ * invent or cancel a rep. Near side is locked once the rest baseline is
+ * calibrated (see hipExtensionSignal.js header note 4b) — otherwise a
+ * deliberate leg lift can flip which leg's landmarks feed this signal and
+ * strand the rest baseline on the wrong leg's geometry.
  *
  * Pure JS, no dependencies.
  */
@@ -43,6 +46,7 @@ export function createPelvicLiftSignal(config = {}) {
   const CAL_GIVE_UP = config.calGiveUp ?? 90;    // frames, then take the lowest recent pelvis as rest
 
   let side = "left";
+  let sideLocked = false; // frozen once the rest baseline is calibrated
   let calibrated = false;
   let framesSeen = 0;
   let restY = null;    // pelvis y at rest (image units; larger = lower in the picture)
@@ -64,6 +68,7 @@ export function createPelvicLiftSignal(config = {}) {
   }
 
   function chooseSide(landmarks) {
+    if (sideLocked) return; // frozen — a deliberate leg lift can't reassign the reference leg anymore
     const score = (s) => Object.values(CHAIN[s]).reduce((t, i) => t + visOf(landmarks[i]), 0);
     // hysteresis: only switch sides when the other is clearly better
     if (side === "left" && score("right") > score("left") + 0.3) side = "right";
@@ -107,6 +112,7 @@ export function createPelvicLiftSignal(config = {}) {
           calibrated = true;
         }
       }
+      if (calibrated) sideLocked = true;
 
       const base = restY ?? lowestY, scale = len0 ?? len;
       const raw = (base - y) / scale;
@@ -121,7 +127,7 @@ export function createPelvicLiftSignal(config = {}) {
     isCalibrated() { return calibrated; },
     getRest() { return restY; },
     reset() {
-      side = "left"; calibrated = false; framesSeen = 0;
+      side = "left"; sideLocked = false; calibrated = false; framesSeen = 0;
       restY = null; len0 = null; lowestY = null; lastY = null;
       ys.length = 0; recent.length = 0;
     },

@@ -22,6 +22,8 @@ import { FEEDBACK_MESSAGES as M } from "./src/lib/feedbackMessages.js";
 import { createSingleLegBridgeTracker } from "./src/lib/singleLegBridgeTracker.js";
 import { createStartCountdown } from "./src/lib/startCountdown.js";
 import { createLiveSession } from "./src/lib/liveSession.js";
+import { createPelvicLiftSignal } from "./src/lib/pelvicLiftSignal.js";
+import { createRepCounter } from "./src/lib/repCounter.js";
 
 const fx = JSON.parse(fs.readFileSync(new URL("./test-fixtures/glute-bridge-real-landmarks.json", import.meta.url)));
 const ASPECT = fx.aspect;
@@ -459,6 +461,150 @@ function runSession(frames, { region, target = 3, aspect = ASPECT } = {}) {
   // Fully visible person: still starts with the countdown, still counts, still uses the validated angle.
   const fullRun = runSession(play(idx), { region: "lower" });
   check("Whole body in frame, pelvis+lower-limb rule: same countdown, same 3 reps", fullRun.reps === 3 && fullRun.goAt !== null && fullRun.goAt <= 4300, `${fullRun.reps} reps, Go at ${fullRun.goAt} ms`);
+}
+
+// ---------------------------------------------------------------- 8. reported bug: a deliberate leg lift can't corrupt tracking
+console.log("\n--- 8. Reported bug: deliberately lifting the OTHER leg mid-session doesn't corrupt tracking ---\n");
+{
+  // Signal level: near side locks once calibrated, and stays locked through a
+  // big, sustained visibility swing on the other side (the signature of a
+  // deliberate leg lift — the lifted leg becomes far more visible/prominent).
+  for (const [name, make] of [
+    ["hipExtensionSignal (torso reference)", () => createHipExtensionSignal()],
+    ["pelvicLiftSignal", () => createPelvicLiftSignal()],
+  ]) {
+    const sig = make();
+    for (let i = 0; i < 40; i++) sig.process(clone(base[0]), { aspect: ASPECT }); // calibrate at rest
+    check(`${name}: calibrates`, sig.isCalibrated());
+    const before = sig.process(clone(base[0]), { aspect: ASPECT }).side;
+    const otherIdx = before === "left" ? [12, 24, 26] : [11, 23, 25];
+    for (let i = 0; i < 90; i++) { // ~3 s
+      const l = clone(base[0]);
+      for (const j of otherIdx) l[j].visibility = 1.0;
+      sig.process(l, { aspect: ASPECT });
+    }
+    const after = sig.process(clone(base[0]), { aspect: ASPECT }).side;
+    check(`${name}: near side stays locked through the swing`, after === before, `was ${before}, now ${after}`);
+  }
+}
+{
+  // Tracker level, end to end: 2 correct reps, then lift the OTHER leg toward
+  // the camera for ~2 s (boosted visibility AND moved to a "raised" position)
+  // while the TRACKED leg stays exactly at rest throughout, then 2 more
+  // correct reps. This is the exact scenario reported: deliberately lifting a
+  // leg, then good reps stop being counted for the rest of the session.
+  const tracker = createGluteBridgeTracker();
+  const sm = createLandmarkSmoother();
+  let t = 1000;
+  const feed = (lms) => { tracker.processFrame(sm.smooth(lms, t), t, { aspect: ASPECT }); t += DT; };
+
+  for (let i = 0; i < 40; i++) feed(clone(base[0])); // settle + calibrate
+  const sideBefore = tracker.getSide();
+
+  for (const i of oneRep()) feed(clone(base[i]));
+  for (let i = 0; i < 20; i++) feed(clone(base[0]));
+  for (const i of oneRep()) feed(clone(base[i]));
+  for (let i = 0; i < 20; i++) feed(clone(base[0]));
+  check("2 correct reps count normally before the leg lift", tracker.getRepCount() === 2, `counted ${tracker.getRepCount()}`);
+
+  const otherSide = sideBefore === "right" ? "left" : "right";
+  const otherIdx = otherSide === "left" ? { sh: 11, hip: 23, knee: 25, ank: 27 } : { sh: 12, hip: 24, knee: 26, ank: 28 };
+  const top = base[TOP];
+  const lifted = () => {
+    const l = clone(base[0]); // tracked leg stays exactly at rest throughout
+    for (const key of ["sh", "hip", "knee", "ank"]) { const j = otherIdx[key]; l[j] = { ...top[j], visibility: 1.0 }; }
+    return l;
+  };
+  for (let i = 0; i < 60; i++) feed(lifted()); // ~2 s of the other leg raised and highly visible
+
+  check("Near side is unchanged after the disturbance", tracker.getSide() === sideBefore, `was ${sideBefore}, now ${tracker.getSide()}`);
+  check("The disturbance itself is not counted as a rep (still reading the resting tracked leg)", tracker.getRepCount() === 2, `counted ${tracker.getRepCount()}`);
+
+  for (const i of oneRep()) feed(clone(base[i]));
+  for (let i = 0; i < 20; i++) feed(clone(base[0]));
+  for (const i of oneRep()) feed(clone(base[i]));
+  for (let i = 0; i < 30; i++) feed(clone(base[0]));
+  check("Counting resumes after the disturbance: 4 of 4 reps counted, none lost", tracker.getRepCount() === 4, `counted ${tracker.getRepCount()}`);
+}
+
+// ---------------------------------------------------------------- 9. deliberately lifting a leg gets a real correction
+console.log("\n--- 9. Deliberately lifting a leg during Glute Bridge gets a real correction, not silence ---\n");
+{
+  // Move ONLY the near-side ankle to set the hip-knee-ankle angle to an exact
+  // value (deg), leaving hip/knee/shoulder (what the hip-extension signal
+  // reads) untouched, so the rep itself still looks completely normal.
+  function setKneeAngle(frame, side, targetDeg) {
+    const l = clone(frame);
+    const idx = side === "left" ? { hip: 23, knee: 25, ankle: 27 } : { hip: 24, knee: 26, ankle: 28 };
+    const A = ASPECT, hip = l[idx.hip], knee = l[idx.knee], ankle = l[idx.ankle];
+    const kx = knee.x * A, ky = knee.y, hx = hip.x * A, hy = hip.y, ax = ankle.x * A, ay = ankle.y;
+    const shinLen = Math.hypot(ax - kx, ay - ky);
+    const hipDist = Math.hypot(hx - kx, hy - ky);
+    const ux = (hx - kx) / hipDist, uy = (hy - ky) / hipDist; // unit vector knee -> hip
+    const theta = (targetDeg * Math.PI) / 180;
+    const rot = (ang) => ({ x: ux * Math.cos(ang) - uy * Math.sin(ang), y: ux * Math.sin(ang) + uy * Math.cos(ang) });
+    let d = rot(theta);
+    if (ky + d.y * shinLen < ky) d = rot(-theta); // keep the foot below the knee, for a plausible-looking picture
+    l[idx.ankle] = { ...ankle, x: (kx + d.x * shinLen) / A, y: ky + d.y * shinLen };
+    return l;
+  }
+
+  const tracker = createGluteBridgeTracker();
+  const sm = createLandmarkSmoother();
+  let t = 1000;
+  const feed = (lms) => { tracker.processFrame(sm.smooth(lms, t), t, { aspect: ASPECT }); t += DT; };
+  for (let i = 0; i < 40; i++) feed(clone(base[0]));
+  const side = tracker.getSide();
+
+  // A normal-looking rep, but the knee straightens ~50 deg past its own start
+  // once the hips are up — a leg lifting/extending, not a two-leg bridge.
+  const idx = oneRep();
+  for (const i of idx) {
+    const straighten = i > TOP * 0.6; // once well into the lift
+    feed(straighten ? setKneeAngle(base[i], side, 100) : clone(base[i]));
+  }
+  for (let i = 0; i < 30; i++) feed(clone(base[0]));
+
+  check("A lifted-leg rep still counts (the hips genuinely rose)", tracker.getRepCount() === 1, `counted ${tracker.getRepCount()}`);
+  check("...and gets 'keep your knee bent', not 'Good'", tracker.getFeedback().includes(M.keepKneeBent) && !tracker.getFeedback().some((f) => f.good), `feedback: ${tracker.getFeedback().map((f) => f.voiceEn).join(", ")}`);
+
+  // Control: the SAME rep with no knee override must not false-positive.
+  const clean = createGluteBridgeTracker();
+  let t2 = 1000;
+  const feed2 = (lms) => { clean.processFrame(sm.smooth(lms, t2), t2, { aspect: ASPECT }); t2 += DT; };
+  for (let i = 0; i < 40; i++) feed2(clone(base[0]));
+  for (const i of idx) feed2(clone(base[i]));
+  for (let i = 0; i < 30; i++) feed2(clone(base[0]));
+  check("A genuine correct-form rep never gets 'keep your knee bent'", !clean.getFeedback().includes(M.keepKneeBent), `feedback: ${clean.getFeedback().map((f) => f.voiceEn).join(", ")}`);
+}
+
+// ---------------------------------------------------------------- 10. repCounter self-heal watchdog
+console.log("\n--- 10. repCounter: if a signal ever got stuck 'active', the counter self-heals ---\n");
+{
+  const rc = createRepCounter({ enter: 0.5, exit: 0.15, minPeak: 0.5, stuckAfterMs: 5000 });
+  let t = 0;
+  rc.update(0.9, t);
+  check("Enters active on a signal above ENTER", rc.isActive());
+  t += 5001; // a signal that never returns, for far longer than any real rep takes
+  const duringStuck = rc.update(0.9, t);
+  check("Past the stuck threshold: abandons the attempt (no rep credited), back to idle", !rc.isActive() && !duringStuck && rc.getRepCount() === 0, `active=${rc.isActive()}, credited=${duringStuck}, reps=${rc.getRepCount()}`);
+
+  rc.update(0.9, (t += 10)); // a genuine rep right after
+  rc.update(0.1, (t += 400));
+  const completed = rc.update(0.1, (t += 250)); // clears the 200ms exit debounce
+  check("A genuine rep right after the recovery is still counted", completed && rc.getRepCount() === 1, `completed=${completed}, reps=${rc.getRepCount()}`);
+}
+{
+  // The default (45 s) must never cut off a legitimate slow, controlled rep.
+  const rc = createRepCounter({ enter: 0.5, exit: 0.15, minPeak: 0.5 });
+  let t = 0;
+  rc.update(0.9, t);
+  t += 40000; // 40 s into a very slow held rep — still well under the 45 s default
+  rc.update(0.9, t);
+  check("Default watchdog (45 s) doesn't touch a 40 s slow rep", rc.isActive(), `active after 40s: ${rc.isActive()}`);
+  rc.update(0.1, (t += 10)); // crosses below EXIT, starts the exit debounce
+  const completed = rc.update(0.1, (t += 250)); // debounce clears -> finalizes
+  check("...and it still completes normally when the patient finally returns", completed && rc.getRepCount() === 1, `completed=${completed}, reps=${rc.getRepCount()}`);
 }
 
 const failed = results.filter((r) => !r).length;

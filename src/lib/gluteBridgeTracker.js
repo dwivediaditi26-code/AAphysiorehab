@@ -17,9 +17,18 @@
  * test-fixtures/ and test-trackers.mjs.
  *
  * Form checks (only ones a side camera can measure reliably):
- *   - speed:  lifted/lowered faster than ~3.5 range-widths per second
- *   - dip:    dropped >= 25% of the range mid-rep and came back up (hips sagged)
- *   - height: rep peaked below 70% of the range (didn't lift high enough)
+ *   - speed:    lifted/lowered faster than ~3.5 range-widths per second
+ *   - dip:      dropped >= 25% of the range mid-rep and came back up (hips sagged)
+ *   - height:   rep peaked below 70% of the range (didn't lift high enough)
+ *   - legLifted: the near-side knee straightened well past where the rep
+ *     started — a leg lifting/extending off the mat, not a two-leg bridge.
+ *     Measured against THIS REP's own starting knee angle (planted-foot
+ *     bridges naturally open the knee angle some as the hips rise — ~16 deg
+ *     in the reference clip — so the threshold has to clear that margin).
+ *     Draft threshold from one clip with no real "lifted a leg" footage;
+ *     validate like the others in test-fixtures/. Catches a leg straightening
+ *     out; a bent-knee march (knee angle roughly unchanged, whole leg lifts)
+ *     would not trip this — no footage of that either.
  * Removed on purpose: the old "keep hips level" flag compared left vs right
  * hip height — in a side view both hips overlap, so it measured noise and
  * fired false corrections. Left/right symmetry needs a front/foot-end view.
@@ -29,6 +38,14 @@
 import { FEEDBACK_MESSAGES as M } from "./feedbackMessages.js";
 import { createRepCounter } from "./repCounter.js";
 import { createHipExtensionSignal } from "./hipExtensionSignal.js";
+import { angleAtAspect } from "./trackingMath.js";
+
+// Near-side hip/knee/ankle, matching the side hipExtensionSignal.js locks onto
+// (its `side` result — see createHipExtensionSignal's near-side lock).
+const LEG = {
+  left: { hip: 23, knee: 25, ankle: 27 },
+  right: { hip: 24, knee: 26, ankle: 28 },
+};
 
 export function createGluteBridgeTracker(config = {}) {
   const SPEED_FLAG = config.speedFlag ?? 3.5;   // range-widths / second
@@ -36,6 +53,8 @@ export function createGluteBridgeTracker(config = {}) {
   const DIP_RECOVER = config.dipRecover ?? 0.15;
   const LIFT_FLAG = config.liftFlag ?? 0.7;     // peak below this = "lift higher"
   const GOOD_TOP = config.goodTop ?? 0.85;      // counts as "at the top" (hold timing)
+  const KNEE_LIFT_FLAG = config.kneeLiftFlag ?? 30; // degrees the near-side knee may open from the rep's own start before we call it a lifted leg
+  const KNEE_MIN_VIS = config.kneeMinVisibility ?? 0.3;
 
   const signal = createHipExtensionSignal(config.signal);
   // Bridging returns are deliberate (>= ~1 s), so a longer debounce than the
@@ -56,6 +75,7 @@ export function createGluteBridgeTracker(config = {}) {
       hi: 0, peak: 0, dipping: false, dipMin: 1,  // dip detector (hi resets after a dip; peak never does)
       topSince: null, topMs: 0,                   // time spent near the top this rep
       activeSince: null,
+      kneeStart: null, kneeMaxDev: 0,              // leg-lift detector: this rep's starting knee angle, max drift from it
       lastRep: null,
     };
   }
@@ -77,6 +97,17 @@ export function createGluteBridgeTracker(config = {}) {
       if (!r.valid) return s;        // bad frame: skip it entirely, never guess
       if (r.angle !== undefined) s.angle = r.angle;  // only the torso reference has a joint angle
 
+      // Near-side knee angle — independent of which reference (torso/pelvis)
+      // is driving the hip-extension signal, and computed fresh every frame
+      // so it can't be corrupted by anything upstream.
+      const legIdx = LEG[s.side] || LEG.left;
+      const hipP = landmarks[legIdx.hip], kneeP = landmarks[legIdx.knee], ankleP = landmarks[legIdx.ankle];
+      let kneeAngle = null;
+      if (hipP && kneeP && ankleP) {
+        const minKneeVis = Math.min(hipP.visibility ?? 1, kneeP.visibility ?? 1, ankleP.visibility ?? 1);
+        if (minKneeVis >= KNEE_MIN_VIS) kneeAngle = angleAtAspect(hipP, kneeP, ankleP, meta.aspect);
+      }
+
       const ext = r.ext;
       const wasActive = counter.isActive();
 
@@ -91,6 +122,13 @@ export function createGluteBridgeTracker(config = {}) {
         if (s.dipping) {
           if (ext < s.dipMin) s.dipMin = ext;
           if (ext > s.dipMin + DIP_RECOVER) { s.feedbackFlags.add("dip"); s.dipping = false; s.hi = ext; }
+        }
+
+        // leg-lift detector: how far has the near-side knee opened from where
+        // THIS rep started (see header note above KNEE_LIFT_FLAG)?
+        if (kneeAngle !== null && s.kneeStart !== null) {
+          const dev = kneeAngle - s.kneeStart;
+          if (dev > s.kneeMaxDev) s.kneeMaxDev = dev;
         }
 
         // time at the top (for rep stats)
@@ -109,6 +147,7 @@ export function createGluteBridgeTracker(config = {}) {
         const peakExt = s.peak;
         if (s.maxRate > SPEED_FLAG) s.feedbackFlags.add("speed");
         if (peakExt < LIFT_FLAG) s.feedbackFlags.add("lift");
+        if (s.kneeMaxDev > KNEE_LIFT_FLAG) s.feedbackFlags.add("legLifted");
         s.lastRep = { peakExt, topMs: s.topMs, durationMs: s.activeSince ? now - s.activeSince : null, flags: [...s.feedbackFlags] };
       }
 
@@ -117,6 +156,7 @@ export function createGluteBridgeTracker(config = {}) {
         s.feedbackFlags = new Set();
         s.maxRate = 0; s.hi = ext; s.peak = ext; s.dipping = false; s.dipMin = 1;
         s.topSince = null; s.topMs = 0; s.activeSince = now;
+        s.kneeStart = kneeAngle; s.kneeMaxDev = 0;
       }
 
       return s;
@@ -128,9 +168,13 @@ export function createGluteBridgeTracker(config = {}) {
     getStatusHint() { return s.calibrated ? null : "calibrating"; },
     /** 'torso' (shoulder-hip-knee angle) or 'lowerBody' (pelvis rise) — see hipExtensionSignal.js. */
     getSignalReference() { return signal.getReference(); },
+    /** 'left' | 'right' | null — the near side, locked once calibrated (see hipExtensionSignal.js note 4b). */
+    getSide() { return s.side; },
     getLastRepStats() { return s.lastRep; },
     getFeedback() {
       const out = [];
+      // Wrong exercise (a leg lifted) outranks pace/height/sag — lead with it.
+      if (s.feedbackFlags.has("legLifted")) out.push(M.keepKneeBent);
       if (s.feedbackFlags.has("speed")) out.push(M.slowerRiseLower);
       if (s.feedbackFlags.has("dip")) out.push(M.keepHipsUp);
       if (s.feedbackFlags.has("lift")) out.push(M.liftHipsHigher);

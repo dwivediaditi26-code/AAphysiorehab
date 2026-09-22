@@ -56,15 +56,24 @@ export const FEEDBACK_MESSAGES = {
   },
   liftHipsHigher: {
     en: "Lift your hips a little higher",
-    hi: "कूल्हों को थोड़ा और ऊपर उठाएं",
+    hi: "कमर को थोड़ा और ऊपर उठाएं",
     voiceEn: "Lift higher",
-    voiceHi: "थोड़ा ऊपर",
+    voiceHi: "कमर ऊपर",
   },
   keepHipsUp: {
     en: "Keep your hips up — don't let them drop mid-lift",
-    hi: "कूल्हों को ऊपर रखें — बीच में नीचे न गिरने दें",
+    hi: "कमर को ऊपर रखें — बीच में नीचे न गिरने दें",
     voiceEn: "Hips up",
-    voiceHi: "कूल्हे ऊपर",
+    voiceHi: "कमर ऊपर",
+  },
+  // Fires when the near-side knee straightens well past where it started the
+  // rep — a leg lifting/extending off the mat during a two-leg bridge (see
+  // gluteBridgeTracker.js). "Bend your knee" names the geometry directly.
+  keepKneeBent: {
+    en: "Keep your knee bent and your foot flat on the ground",
+    hi: "घुटने को मुड़ा रखें, पैर ज़मीन पर टिका रखें",
+    voiceEn: "Bend your knee",
+    voiceHi: "घुटना मोड़ें",
   },
   noRocking: {
     en: "Keep your hips level, avoid rocking side to side",

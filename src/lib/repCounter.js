@@ -18,6 +18,17 @@
  *
  * Two-sided trackers (Dead Bug, Bird Dog, Hip Abduction, Side-Lying Leg
  * Raise) just use two instances of this — one per side.
+ *
+ * Self-heal watchdog: if a signal ever gets corrupted upstream (a tracking
+ * bug, a lost side reference, an odd movement) the visible symptom is the
+ * same either way — the counter enters "active" and the signal never comes
+ * back down below EXIT, so it never finalizes, and since it's still "active"
+ * a fresh genuine rep can't start one either: the app silently stops
+ * counting for the rest of the session. STUCK_AFTER_MS is a last-resort
+ * recovery: if "active" has lasted far longer than any real single rep could
+ * (set generously — clinical tempo work can legitimately run tens of seconds
+ * per rep), abandon that attempt with no rep credited and return to idle, so
+ * the next genuine rep can still be counted instead of nothing ever again.
  */
 export function createRepCounter(config = {}) {
   const ENTER = config.enter ?? 0.35;
@@ -25,6 +36,7 @@ export function createRepCounter(config = {}) {
   const MIN_PEAK = config.minPeak ?? 0.3;
   const EXIT_DEBOUNCE_MS = config.exitDebounceMs ?? 200;
   const MIN_REP_INTERVAL_MS = config.minRepIntervalMs ?? 350;
+  const STUCK_AFTER_MS = config.stuckAfterMs ?? 45000;
 
   const state = {
     phase: "idle", // idle | active
@@ -32,6 +44,7 @@ export function createRepCounter(config = {}) {
     reps: 0,
     belowExitSince: null,
     lastRepAt: 0,
+    activeSince: null,
   };
 
   return {
@@ -47,11 +60,23 @@ export function createRepCounter(config = {}) {
           state.phase = "active";
           state.peak = signal;
           state.belowExitSince = null;
+          state.activeSince = now;
         }
         return completed;
       }
 
       // active
+      if (now - state.activeSince >= STUCK_AFTER_MS) {
+        // Give up on this attempt (no rep credited) and go back to idle so the
+        // NEXT real rep can still be counted, instead of the session being
+        // stuck silently for good.
+        state.phase = "idle";
+        state.peak = 0;
+        state.belowExitSince = null;
+        state.activeSince = null;
+        return completed;
+      }
+
       if (signal > state.peak) state.peak = signal;
 
       if (signal < EXIT) {
@@ -65,6 +90,7 @@ export function createRepCounter(config = {}) {
           state.phase = "idle";
           state.peak = 0;
           state.belowExitSince = null;
+          state.activeSince = null;
         }
       } else {
         state.belowExitSince = null; // bounced back up — not a real return, reset the debounce timer
@@ -81,6 +107,7 @@ export function createRepCounter(config = {}) {
       state.reps = 0;
       state.belowExitSince = null;
       state.lastRepAt = 0;
+      state.activeSince = null;
     },
   };
 }
