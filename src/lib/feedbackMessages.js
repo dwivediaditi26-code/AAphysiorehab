@@ -143,6 +143,20 @@ export const FEEDBACK_MESSAGES = {
     voiceEn: "Face the camera",
     voiceHi: "कैमरे के सामने खड़े हों",
   },
+  // Spoken confirmation for the air-gesture "point and hold" control — the
+  // screen changes too, but the whole point is not needing to look at it.
+  gesturePaused: {
+    en: "Paused",
+    hi: "रोका",
+    voiceEn: "Paused",
+    voiceHi: "रुका",
+  },
+  gestureResumed: {
+    en: "Resumed",
+    hi: "फिर शुरू",
+    voiceEn: "Resumed",
+    voiceHi: "फिर शुरू",
+  },
   letsGetStarted: {
     en: "Let's get started in…",
     hi: "चलिए शुरू करते हैं…",

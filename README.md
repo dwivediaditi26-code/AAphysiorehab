@@ -141,6 +141,18 @@ Camera tracking runs every landmark through `src/lib/poseQuality.js` and
   returning, the counter abandons that attempt (no rep credited) and goes
   back to idle, so a genuinely stuck signal — from this or any other cause —
   can't leave the app silently not counting for the rest of the session.
+- **Hands-free "point and hold" control** (`airPointer.js`, `screenMapping.js`,
+  `AirPointerOverlay.jsx`) — for when the phone is propped up out of reach,
+  which is most floor exercises. Raise a hand above your head and it becomes
+  a cursor on screen; hold it over Pause/Resume, Finish, or the X for ~1s to
+  activate it, same as tapping. "Above the head" is a deliberately high bar —
+  well outside the range of motion of every tracked exercise today, so a
+  genuine rep can't be misread as a gesture (draft; validate before adding an
+  exercise with real overhead reach). Shared by both live tracking screens; a
+  header toggle turns it off. Only reaches the two screens where the camera
+  is already running — the pre-session "Start Exercise" button doesn't have
+  a camera active yet, so it isn't reachable this way without a bigger change
+  (starting the camera earlier).
 - Model: Pose Landmarker **Full**, WASM pinned to the installed package version
   (`src/lib/landmarker.js`: keep `TASKS_VISION_VERSION` equal to
   `package-lock.json`), GPU delegate with CPU fallback.
