@@ -9,6 +9,7 @@ import { createSquatTracker } from "./src/lib/squatTracker.js";
 import { createSitToStandTracker } from "./src/lib/sitToStandTracker.js";
 import { createHeelRaiseTracker } from "./src/lib/heelRaiseTracker.js";
 import { createShoulderAbductionTracker } from "./src/lib/shoulderAbductionTracker.js";
+import { createShoulderFlexionTracker } from "./src/lib/shoulderFlexionTracker.js";
 import { createHipAbductionTracker } from "./src/lib/hipAbductionTracker.js";
 import { createSupermanTracker } from "./src/lib/supermanTracker.js";
 import { createPronePressUpTracker } from "./src/lib/pronePressUpTracker.js";
@@ -175,15 +176,31 @@ test("Heel Raises (heelRaiseTracker.js)", () => {
   }, 220);
 });
 
-// Shoulder Abduction: both wrists move outward from shoulders, then return.
+// Shoulder Abduction: the hip-shoulder-elbow angle opens from arm-at-side
+// (~10°, rest) to raised-to-shoulder-height (~100°, peak) and back — same
+// pointAt() convention as Squat/Sit-to-Stand's knee angle, applied to both
+// arms (a clean bilateral raise).
 test("Shoulder Abduction (shoulderAbductionTracker.js)", () => {
   const tracker = createShoulderAbductionTracker();
+  const shoulder = { x: 0.4, y: 0.3 };
+  const hip = pointAt(shoulder, 260, 0.3);
   return runSequence(tracker, (t) => {
-    const p = triangle(t);
-    return lm({
-      15: { x: lerp(0.4, 0.1, p) },
-      16: { x: lerp(0.6, 0.9, p) },
-    });
+    const angle = lerp(10, 100, triangle(t));
+    const elbow = pointAt(shoulder, 260 - angle, 0.2);
+    return lm({ 11: shoulder, 12: shoulder, 23: hip, 24: hip, 13: elbow, 14: elbow });
+  }, 220);
+});
+
+// Shoulder Flexion: same hip-shoulder-elbow angle, one arm only (near side —
+// this tracker reads a single side, like the other side-view signals).
+test("Shoulder Flexion (shoulderFlexionTracker.js)", () => {
+  const tracker = createShoulderFlexionTracker();
+  const shoulder = { x: 0.4, y: 0.3 };
+  const hip = pointAt(shoulder, 260, 0.3);
+  return runSequence(tracker, (t) => {
+    const angle = lerp(10, 100, triangle(t));
+    const elbow = pointAt(shoulder, 260 - angle, 0.2);
+    return lm({ 11: shoulder, 23: hip, 13: elbow });
   }, 220);
 });
 
@@ -271,6 +288,30 @@ console.log(`${jitterOk ? "PASS" : "FAIL"}  ${jitterResult.name}  →  reps coun
 console.log(`\n${jitterOk ? "Jitter did not cause a double-count." : "REGRESSION: jitter caused a double-count."}\n`);
 overallOk = overallOk && jitterOk;
 
+// Same regression, specifically for Shoulder Flexion — this tracker predated
+// repCounter.js (see shoulderFlexionTracker.js's own header) and had exactly
+// this bug: a single noisy frame crossing back below the exit threshold
+// counted "rep finished, new rep started" with no debounce.
+test("Shoulder Flexion with jitter (shoulderFlexionTracker.js)", () => {
+  const tracker = createShoulderFlexionTracker();
+  const shoulder = { x: 0.4, y: 0.3 };
+  const hip = pointAt(shoulder, 260, 0.3);
+  return runSequence(tracker, (t) => {
+    let angle;
+    if (t < 0.3) angle = lerp(10, 100, t / 0.3);
+    else if (t < 0.35) angle = lerp(100, 20, (t - 0.3) / 0.05); // brief jitter dip, genuinely below EXIT
+    else if (t < 0.5) angle = lerp(20, 100, (t - 0.35) / 0.15); // recovers, still holding
+    else angle = lerp(100, 10, (t - 0.5) / 0.5); // real return
+    const elbow = pointAt(shoulder, 260 - angle, 0.2);
+    return lm({ 11: shoulder, 23: hip, 13: elbow });
+  }, 280);
+});
+const flexionJitterResult = results[results.length - 1];
+const flexionJitterOk = flexionJitterResult.count === 1;
+console.log(`${flexionJitterOk ? "PASS" : "FAIL"}  ${flexionJitterResult.name}  →  reps counted: ${flexionJitterResult.count} (expected exactly 1)`);
+console.log(`\n${flexionJitterOk ? "Jitter did not cause a double-count." : "REGRESSION: jitter caused a double-count."}\n`);
+overallOk = overallOk && flexionJitterOk;
+
 // Negative control: static pose, zero movement — every tracker should report 0.
 console.log("--- Negative control: static pose (no movement) — expect 0 reps for all ---\n");
 const staticTests = [
@@ -282,6 +323,7 @@ const staticTests = [
   ["Sit-to-Stand", createSitToStandTracker],
   ["Heel Raises", createHeelRaiseTracker],
   ["Shoulder Abduction", createShoulderAbductionTracker],
+  ["Shoulder Flexion", createShoulderFlexionTracker],
   ["Standing Hip Abduction", createHipAbductionTracker],
   ["Superman", createSupermanTracker],
   ["Prone Press-Up", createPronePressUpTracker],
