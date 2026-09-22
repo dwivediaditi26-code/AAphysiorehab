@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { X, Pause, Play, AlertTriangle, VolumeX } from "lucide-react";
+import { X, Pause, Play, AlertTriangle, VolumeX, Hand } from "lucide-react";
 import { parseRepsTarget } from "../../lib/helpers.js";
 import { createLiveSession } from "../../lib/liveSession.js";
 import { getLandmarker } from "../../lib/landmarker.js";
@@ -7,6 +7,7 @@ import { FEEDBACK_MESSAGES as M } from "../../lib/feedbackMessages.js";
 import { TRACKER_CAMERA_ORIENTATION, TRACKER_FRAMING_REGION } from "../../lib/trackedExercises.js";
 import { createVoiceCoach } from "../../lib/voiceCoach.js";
 import { numberWord } from "../../lib/numberWords.js";
+import AirPointerOverlay from "./AirPointerOverlay.jsx";
 
 /**
  * Real camera + MediaPipe Pose Landmarker exercise-tracking screen. Generic —
@@ -49,10 +50,16 @@ const CONNECTIONS = [
 export default function TrackedExerciseSession({ ex, prescribed, trackerFactory, onClose, onFinish }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const containerRef = useRef(null);
   const streamRef = useRef(null);
   const rafRef = useRef(null);
   const startRef = useRef(null);
   const voiceCoachRef = useRef(createVoiceCoach());
+  // Air-gesture control: real button refs the overlay hit-tests a raised-hand
+  // cursor against — see AirPointerOverlay.jsx / airPointer.js.
+  const pauseBtnRef = useRef(null);
+  const finishBtnRef = useRef(null);
+  const closeBtnRef = useRef(null);
   const orientation = TRACKER_CAMERA_ORIENTATION[ex.id] || "frontal";
   // What must be in frame: 'lower' (pelvis + lower limb) for bridging, else the near-side body.
   const region = TRACKER_FRAMING_REGION[ex.id] || "whole";
@@ -83,6 +90,8 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
 
   const [voiceOn, setVoiceOn] = useState(voiceCoachRef.current.isSupported());
   const [voiceLang, setVoiceLang] = useState("en"); // 'en' | 'hi'
+  const [gestureOn, setGestureOn] = useState(true); // air-gesture "point and hold" control, on by default
+  const [handLandmarks, setHandLandmarks] = useState(null); // this frame's landmarks, for AirPointerOverlay
 
   useEffect(() => {
     let cancelled = false;
@@ -132,6 +141,7 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
             // countdown and the tracker (liveSession.js). Nothing counts until Go.
             const r = sessionRef.current.process(rawLandmarks, nowMs, { aspect: video.videoWidth / video.videoHeight });
             drawOverlay(canvas, video, r.landmarks);
+            setHandLandmarks(r.landmarks);
             setFraming(r.framing.status);
             setArmed(r.armed);
             setCountdown(r.countdown);
@@ -257,6 +267,21 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
     });
   }
 
+  // Shared by the Pause/Resume button and the air-gesture zone that mirrors
+  // it — spoken confirmation matters here specifically because, unlike
+  // Finish/Close, this doesn't navigate away, so it's the only feedback a
+  // patient not looking at the screen gets that the gesture actually worked.
+  function togglePause() {
+    setRunning((r) => {
+      const next = !r;
+      // Distinct keys per state — voiceCoach rate-limits REPEATS of the same
+      // key, and Paused/Resumed sharing one key would wrongly suppress a
+      // quick pause-then-resume as if it were a repeat of the same message.
+      voiceCoachRef.current.speak(next ? M.gestureResumed : M.gesturePaused, next ? "gesture-resumed" : "gesture-paused");
+      return next;
+    });
+  }
+
   function formatTime(s) {
     const m = Math.floor(s / 60), sec = s % 60;
     return `${m}:${sec < 10 ? "0" : ""}${sec}`;
@@ -290,11 +315,19 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
               </button>
             </div>
           )}
-          <button onClick={onClose} className="text-gray-400"><X size={18} /></button>
+          <button
+            onClick={() => setGestureOn((v) => !v)}
+            className={`p-1.5 rounded-full ${gestureOn ? "bg-violet-50 text-violet-600" : "bg-gray-100 text-gray-400"}`}
+            aria-label={gestureOn ? "Turn off hands-free control" : "Turn on hands-free control"}
+            title="Raise a hand above your head and hold it over a button to use it hands-free"
+          >
+            <Hand size={14} />
+          </button>
+          <button ref={closeBtnRef} onClick={onClose} className="text-gray-400"><X size={18} /></button>
         </div>
       </div>
 
-      <div className="relative flex-1 bg-black">
+      <div ref={containerRef} className="relative flex-1 bg-black">
         <video ref={videoRef} className="hidden" playsInline muted />
         <canvas ref={canvasRef} className="w-full h-full object-cover" />
 
@@ -387,14 +420,26 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
 
       {status === "ready" && (
         <div className="p-4 flex items-center gap-3 shrink-0">
-          <button onClick={() => setRunning((r) => !r)} className="flex-1 flex items-center justify-center gap-1.5 bg-gray-100 text-gray-700 text-sm font-medium py-3 rounded-xl">
+          <button ref={pauseBtnRef} onClick={togglePause} className="flex-1 flex items-center justify-center gap-1.5 bg-gray-100 text-gray-700 text-sm font-medium py-3 rounded-xl">
             {running ? <><Pause size={15} /> Pause</> : <><Play size={15} /> Resume</>}
           </button>
-          <button onClick={finish} className="flex-1 bg-violet-600 text-white text-sm font-semibold py-3 rounded-xl">
+          <button ref={finishBtnRef} onClick={finish} className="flex-1 bg-violet-600 text-white text-sm font-semibold py-3 rounded-xl">
             Finish
           </button>
         </div>
       )}
+
+      <AirPointerOverlay
+        containerRef={containerRef}
+        videoRef={videoRef}
+        landmarks={handLandmarks}
+        enabled={gestureOn && status === "ready"}
+        zones={[
+          { id: "pauseResume", ref: pauseBtnRef, onActivate: togglePause },
+          { id: "finish", ref: finishBtnRef, onActivate: finish },
+          { id: "close", ref: closeBtnRef, onActivate: onClose },
+        ]}
+      />
     </div>
   );
 }
