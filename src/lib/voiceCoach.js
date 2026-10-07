@@ -22,6 +22,7 @@
  */
 
 const COOLDOWN_MS = 3500;
+const LANG_STORAGE_KEY = "physio.voiceLang";
 
 const LANG_VOICE_FIELD = { en: "voiceEn", hi: "voiceHi" };
 const LANG_SPEECH_CODE = { en: "en-IN", hi: "hi-IN" };
@@ -43,12 +44,41 @@ export function unlockSpeechSynthesis() {
   window.speechSynthesis.speak(utter);
 }
 
+/**
+ * Which language the voice should start in: what the patient picked last time
+ * (a Hindi speaker shouldn't have to re-tap "हिं" on every exercise), else
+ * Hindi if their device is set to Hindi, else English. `storage` and
+ * `nav` are injectable for tests; every storage access is guarded because
+ * private windows and some in-app browsers throw on it.
+ */
+export function preferredVoiceLang(storage, nav) {
+  try {
+    const st = storage === undefined ? (typeof window !== "undefined" ? window.localStorage : null) : storage;
+    const saved = st && st.getItem(LANG_STORAGE_KEY);
+    if (saved === "en" || saved === "hi") return saved;
+  } catch { /* fall through to the device language */ }
+  const n = nav === undefined ? (typeof navigator !== "undefined" ? navigator : null) : nav;
+  const lang = n && (n.language || (n.languages && n.languages[0]));
+  return typeof lang === "string" && lang.toLowerCase().startsWith("hi") ? "hi" : "en";
+}
+
+export function rememberVoiceLang(lang, storage) {
+  try {
+    const st = storage === undefined ? (typeof window !== "undefined" ? window.localStorage : null) : storage;
+    if (st && (lang === "en" || lang === "hi")) st.setItem(LANG_STORAGE_KEY, lang);
+  } catch { /* not worth failing a session over */ }
+}
+
 export function createVoiceCoach() {
   let enabled = true;
   let language = "en"; // 'en' | 'hi'
   let lastKey = null;
   let lastSpokenAt = 0;
   let voices = [];
+  // A running spoken sequence (the first-time guide). While one plays, ordinary
+  // speak() calls are ignored: each one cancels the utterance in progress, which
+  // would cut the guide off mid-sentence and then wrongly advance it.
+  let sequence = null;
 
   const supported = typeof window !== "undefined" && "speechSynthesis" in window;
 
@@ -71,19 +101,39 @@ export function createVoiceCoach() {
     );
   }
 
-  function speakOne(text, lang) {
-    if (!supported || !text) return;
+  function speakOne(text, lang, handlers = {}) {
+    if (!supported || !text) return false;
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = lang;
     utter.rate = 1.05;
     const voice = pickVoice(lang);
     if (voice) utter.voice = voice;
+    if (handlers.onEnd) { utter.onend = handlers.onEnd; utter.onerror = handlers.onEnd; }
     window.speechSynthesis.speak(utter);
+    return true;
+  }
+
+  // Rough speaking time, only used as a safety net: some browsers never fire
+  // `end` on a long utterance, and a guide that waits forever is worse than one
+  // that moves on a little early.
+  const estimateMs = (text) => 2000 + String(text).length * 90;
+
+  function cancelSequence() {
+    if (!sequence) return;
+    const seq = sequence;
+    sequence = null;
+    seq.stopped = true;
+    if (seq.timer) clearTimeout(seq.timer);
+    if (supported) window.speechSynthesis.cancel();
+    if (seq.onDone) seq.onDone(false);
   }
 
   return {
     isSupported() { return supported; },
-    setEnabled(value) { enabled = value; if (!value && supported) window.speechSynthesis.cancel(); },
+    setEnabled(value) {
+      enabled = value;
+      if (!value) { cancelSequence(); if (supported) window.speechSynthesis.cancel(); }
+    },
     isEnabled() { return enabled; },
     setLanguage(lang) { language = LANG_VOICE_FIELD[lang] ? lang : "en"; },
     getLanguage() { return language; },
@@ -94,7 +144,7 @@ export function createVoiceCoach() {
      * `rep-${count}`) for events that should always speak regardless of
      * cooldown, like a new rep. */
     speak(message, key) {
-      if (!enabled || !supported || !message) return;
+      if (!enabled || !supported || !message || sequence) return;
       const now = Date.now();
       const isRepeat = key === lastKey;
       if (isRepeat && now - lastSpokenAt < COOLDOWN_MS) return;
@@ -110,9 +160,68 @@ export function createVoiceCoach() {
       lastSpokenAt = now;
     },
 
+    /**
+     * Speak a list of messages one after another, in the selected language, and
+     * report progress so the screen can show the matching text.
+     *   onLine(index, message)  just before each line is spoken
+     *   onDone(completed)       once, when the last line ends (true) or the
+     *                           sequence is cancelled / voice is switched off (false)
+     *   fallbackMs(text)        override the "never got an end event" timeout (tests)
+     * Returns { cancel() }. With voice off or unsupported nothing is spoken and
+     * onDone(false) is called straight away.
+     */
+    speakSequence(messages, { onLine, onDone, fallbackMs } = {}) {
+      cancelSequence();
+      if (!enabled || !supported || !messages || messages.length === 0) {
+        if (onDone) onDone(false);
+        return { cancel() {} };
+      }
+      window.speechSynthesis.cancel(); // clear anything still talking
+      const seq = { stopped: false, timer: null, onDone };
+      sequence = seq;
+      let i = 0;
+      const next = () => {
+        if (seq.stopped) return;
+        if (seq.timer) { clearTimeout(seq.timer); seq.timer = null; }
+        if (i >= messages.length) {
+          sequence = null;
+          if (onDone) onDone(true);
+          return;
+        }
+        const msg = messages[i];
+        const index = i++;
+        if (onLine) onLine(index, msg);
+        const text = msg[LANG_VOICE_FIELD[language] || "voiceEn"];
+        let advanced = false;
+        const advance = () => { if (!advanced) { advanced = true; next(); } };
+        if (!speakOne(text, LANG_SPEECH_CODE[language] || "en-IN", { onEnd: advance })) { advance(); return; }
+        seq.timer = setTimeout(advance, (fallbackMs || estimateMs)(text));
+      };
+      next();
+      return { cancel: cancelSequence };
+    },
+
+    isSequenceActive() { return !!sequence; },
+    cancelSequence,
+
+    /** Call `cb` once whatever is being said has finished (or after maxMs).
+     * Lets the screen close without cutting off the last line — "well done" is
+     * pointless if the next screen cancels it mid-word. */
+    whenIdle(cb, maxMs = 5000) {
+      if (!enabled || !supported) { cb(); return; }
+      const t0 = Date.now();
+      const tick = () => {
+        const busy = window.speechSynthesis.speaking || window.speechSynthesis.pending;
+        if (!busy || Date.now() - t0 >= maxMs) cb();
+        else setTimeout(tick, 100);
+      };
+      setTimeout(tick, 150); // `speaking` only turns true a moment after speak()
+    },
+
     reset() {
       lastKey = null;
       lastSpokenAt = 0;
+      cancelSequence();
       if (supported) window.speechSynthesis.cancel();
     },
   };

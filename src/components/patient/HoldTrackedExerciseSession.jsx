@@ -4,10 +4,12 @@ import { parseHoldTargetMs } from "../../lib/helpers.js";
 import { createPoseQuality } from "../../lib/poseQuality.js";
 import { getLandmarker } from "../../lib/landmarker.js";
 import { FEEDBACK_MESSAGES as M } from "../../lib/feedbackMessages.js";
-import { TRACKER_CAMERA_ORIENTATION } from "../../lib/trackedExercises.js";
-import { createVoiceCoach } from "../../lib/voiceCoach.js";
-import { numberWord } from "../../lib/numberWords.js";
+import { TRACKER_CAMERA_ORIENTATION, cameraSetupTip } from "../../lib/trackedExercises.js";
+import { createVoiceCoach, preferredVoiceLang, rememberVoiceLang } from "../../lib/voiceCoach.js";
+import { holdTick, holdDoneCallout } from "../../lib/guideScript.js";
 import AirPointerOverlay from "./AirPointerOverlay.jsx";
+import GuideCard from "./GuideCard.jsx";
+import { useSpokenBriefing } from "./useSpokenBriefing.js";
 
 /**
  * Real camera + MediaPipe Pose Landmarker session for HOLD-based exercises
@@ -53,9 +55,11 @@ export default function HoldTrackedExerciseSession({ ex, prescribed, trackerFact
   const startRef = useRef(null);
   const voiceCoachRef = useRef(createVoiceCoach());
   const wasHoldingRef = useRef(false);
+  const holdsAnnouncedRef = useRef(0);
+  const framingRef = useRef("initializing");
   const lastAnnouncedSecRef = useRef(0);
   const orientation = TRACKER_CAMERA_ORIENTATION[ex.id] || "side";
-  const setupTip = orientation === "side" ? M.cameraSetupTipSide : M.cameraSetupTipFrontal;
+  const setupTip = cameraSetupTip(ex.id);
   // Smoothing + debounced framing verdict (near-side chain, no far-limb nagging).
   const qualityRef = useRef(null);
   if (!qualityRef.current) qualityRef.current = createPoseQuality({ orientation });
@@ -69,11 +73,19 @@ export default function HoldTrackedExerciseSession({ ex, prescribed, trackerFact
   const [feedback, setFeedback] = useState([]);
   const [framing, setFraming] = useState("initializing"); // stable: initializing | ok | no_person | cut_off | too_small | low_confidence
   const [voiceOn, setVoiceOn] = useState(voiceCoachRef.current.isSupported());
-  const [voiceLang, setVoiceLang] = useState("en");
+  const [voiceLang, setVoiceLang] = useState(() => preferredVoiceLang()); // last choice, else the device language
+  const chooseLang = (lang) => { setVoiceOn(true); setVoiceLang(lang); rememberVoiceLang(lang); };
   const [gestureOn, setGestureOn] = useState(true); // air-gesture "point and hold" control, on by default
   const [handLandmarks, setHandLandmarks] = useState(null); // this frame's landmarks, for AirPointerOverlay
 
   const targetHolds = prescribed ? prescribed.sets : ex.sets;
+
+  // The spoken first-time guide; the hold timer does not run until it has ended.
+  const guide = useSpokenBriefing({
+    voiceCoachRef, status, ex, targetReps: targetHolds, isHold: true,
+    holdSeconds: Math.round(targetHoldMs / 1000), holds: targetHolds,
+    onDone: () => { const m = FRAMING_MESSAGE[framingRef.current]; if (m) voiceCoachRef.current.speak(m, `framing-${framingRef.current}`); },
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -121,6 +133,7 @@ export default function HoldTrackedExerciseSession({ ex, prescribed, trackerFact
             drawOverlay(canvas, video, q.landmarks);
             setHandLandmarks(q.landmarks);
             setFraming(q.framing.status);
+            framingRef.current = q.framing.status;
             setElapsed(Math.floor((nowMs - startRef.current) / 1000));
 
             if (q.framing.speak) {
@@ -128,7 +141,7 @@ export default function HoldTrackedExerciseSession({ ex, prescribed, trackerFact
               if (msg) voiceCoachRef.current.speak(msg, `framing-${q.framing.status}`);
             }
 
-            if (q.trackable) {
+            if (q.trackable && !guide.activeRef.current) {
               trackerRef.current.processFrame(q.landmarks, nowMs, { aspect: video.videoWidth / video.videoHeight });
               const holding = trackerRef.current.isHolding();
               const curElapsedMs = trackerRef.current.getElapsedMs();
@@ -144,8 +157,7 @@ export default function HoldTrackedExerciseSession({ ex, prescribed, trackerFact
                 const sec = Math.floor(curElapsedMs / 1000);
                 if (sec > 0 && sec % 5 === 0 && sec !== lastAnnouncedSecRef.current) {
                   lastAnnouncedSecRef.current = sec;
-                  const w = numberWord(sec, "en"), wHi = numberWord(sec, "hi");
-                  voiceCoachRef.current.speak({ voiceEn: w, voiceHi: wHi }, `holdsec-${sec}`);
+                  voiceCoachRef.current.speak(holdTick(sec, Math.round(targetHoldMs / 1000)), `holdsec-${sec}`);
                 }
               } else {
                 lastAnnouncedSecRef.current = 0;
@@ -160,8 +172,14 @@ export default function HoldTrackedExerciseSession({ ex, prescribed, trackerFact
               }
               wasHoldingRef.current = holding;
 
+              if (completedHolds > holdsAnnouncedRef.current) {
+                holdsAnnouncedRef.current = completedHolds;
+                voiceCoachRef.current.speak(holdDoneCallout({ done: completedHolds, total: targetHolds }), `holddone-${completedHolds}`);
+              }
+
               if (completedHolds >= targetHolds) {
-                finish(completedHolds);
+                // Let "well done" finish being said before the next screen cancels it.
+                voiceCoachRef.current.whenIdle(() => finish(completedHolds));
                 return;
               }
             }
@@ -257,8 +275,8 @@ export default function HoldTrackedExerciseSession({ ex, prescribed, trackerFact
         <div className="flex items-center gap-2 shrink-0">
           {voiceCoachRef.current.isSupported() && (
             <div className="flex items-center gap-0.5 bg-gray-100 rounded-full p-0.5">
-              <button onClick={() => { setVoiceOn(true); setVoiceLang("en"); }} className={`px-2 py-1 rounded-full text-[10px] font-semibold ${voiceOn && voiceLang === "en" ? "bg-white shadow-sm text-violet-700" : "text-gray-400"}`}>EN</button>
-              <button onClick={() => { setVoiceOn(true); setVoiceLang("hi"); }} className={`px-2 py-1 rounded-full text-[10px] font-semibold ${voiceOn && voiceLang === "hi" ? "bg-white shadow-sm text-violet-700" : "text-gray-400"}`}>हिं</button>
+              <button onClick={() => chooseLang("en")} className={`px-2 py-1 rounded-full text-[10px] font-semibold ${voiceOn && voiceLang === "en" ? "bg-white shadow-sm text-violet-700" : "text-gray-400"}`}>EN</button>
+              <button onClick={() => chooseLang("hi")} className={`px-2 py-1 rounded-full text-[10px] font-semibold ${voiceOn && voiceLang === "hi" ? "bg-white shadow-sm text-violet-700" : "text-gray-400"}`}>हिं</button>
               <button onClick={() => setVoiceOn(false)} className={`px-1.5 py-1 rounded-full ${!voiceOn ? "bg-white shadow-sm text-gray-700" : "text-gray-400"}`} aria-label="Mute voice coach"><VolumeX size={12} /></button>
             </div>
           )}
@@ -306,10 +324,12 @@ export default function HoldTrackedExerciseSession({ ex, prescribed, trackerFact
               <span className="bg-black/50 text-white text-xs px-3 py-1.5 rounded-full">{formatTime(elapsed)}</span>
               <span className="bg-black/50 text-white text-xs px-3 py-1.5 rounded-full">{holdsDone} / {targetHolds} holds</span>
             </div>
-            <div className="bg-black/40 text-white text-[11px] px-3 py-1.5 rounded-xl text-center leading-snug">
-              <span className="block">{setupTip.en}</span>
-              <span className="block text-gray-300" lang="hi">{setupTip.hi}</span>
-            </div>
+            {!guide.line && holdsDone === 0 && !isHolding && (
+              <div className="bg-black/40 text-white text-[11px] px-3 py-1.5 rounded-xl text-center leading-snug">
+                <span className="block">{setupTip.en}</span>
+                <span className="block text-gray-300" lang="hi">{setupTip.hi}</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -336,14 +356,17 @@ export default function HoldTrackedExerciseSession({ ex, prescribed, trackerFact
           </div>
         )}
 
-        {status === "ready" && FRAMING_MESSAGE[framing] && !isHolding && (
+        {/* The spoken guide, shown as text while it is being said. */}
+        {status === "ready" && <GuideCard line={guide.line} onSkip={guide.skip} />}
+
+        {status === "ready" && !guide.line && FRAMING_MESSAGE[framing] && !isHolding && (
           <div className={`absolute bottom-3 left-3 right-3 text-white text-xs px-3 py-2 rounded-xl text-center ${framing === "no_person" ? "bg-rose-600/90" : "bg-amber-600/90"}`}>
             <span className="block font-medium">{FRAMING_MESSAGE[framing].en}</span>
             <span className="block" lang="hi">{FRAMING_MESSAGE[framing].hi}</span>
           </div>
         )}
 
-        {status === "ready" && feedback.length > 0 && (!FRAMING_MESSAGE[framing] || isHolding) && (
+        {status === "ready" && !guide.line && feedback.length > 0 && (!FRAMING_MESSAGE[framing] || isHolding) && (
           <div className="absolute bottom-3 left-3 right-3 bg-black/60 text-white text-xs px-3 py-2 rounded-xl text-center">
             <span className="block">{feedback[0].en}</span>
             <span className="block text-gray-300" lang="hi">{feedback[0].hi}</span>

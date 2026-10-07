@@ -173,7 +173,109 @@ Camera tracking runs every landmark through `src/lib/poseQuality.js` and
   (`src/lib/landmarker.js`: keep `TASKS_VISION_VERSION` equal to
   `package-lock.json`), GPU delegate with CPU fallback.
 
-`npm test` runs the synthetic tracker suite plus `test-bridge-reliability.mjs`,
-which replays **real** MediaPipe landmarks (`test-fixtures/`). Thresholds are a
+`npm test` runs the synthetic tracker suite, `test-air-pointer.mjs`,
+`test-form-rules.mjs` (neck and shoulder form rules, synthetic geometry),
+`test-guide.mjs` (the spoken guide and the speech sequencing, against a fake
+speech engine), and
+`test-bridge-reliability.mjs`, which replays **real** MediaPipe landmarks
+(`test-fixtures/`). Thresholds are a
 draft from one studio clip. Add your own patients' footage (correct AND
 wrong-form reps) to `test-fixtures/` before trusting a cue clinically.
+
+## Neck and shoulder form rules
+
+Where these came from: three YouTube demonstrations were watched frame by frame
+(play, pause at the top of each movement, read the pose and the on-screen cue
+cards, and read the spoken coaching as captions), then each movement was turned
+into an angle rule, a rep definition, the wrong-form cues, and a Hindi/English
+command pair. Nothing below was copied from a video's audio or visuals; the
+videos only decided *what to measure and what counts as wrong*.
+
+| Source video | Used for |
+|---|---|
+| Physiotutors, "Active Range of Motion: Shoulder" (787k views) | Shoulder abduction, flexion, extension, rotation: how each is performed, and the compensations to watch for (leaning, shrugging, scapular retraction, abducting the arm during rotation) |
+| AskDoctorJo, "Chin Tucks Sitting" (977k views) | Chin tuck: the head slides straight back, it is not a nod |
+| Saurabh Bothra Yoga, "6 Exercises for NECK MOBILITY" in Hindi (3.7M views) | Neck rotation, extension, side bend, chin tuck, lateral glide, half circle; and the everyday Hinglish phrasing the Hindi cues follow |
+
+**Measured, per exercise.** Every angle is aspect-corrected and is judged as a
+*change from the patient's own resting value* (first still ~0.5 s), because
+resting head posture varies a lot between people and a single 2D camera cannot
+give an absolute anatomical angle.
+
+| Exercise | Camera / region | Angle measured (`headPose.js`, `shoulderForm.js`) | Rep counts when | Normal range (reference, not from the videos) |
+|---|---|---|---|---|
+| Chin Tuck (`e29`) | side, `upper` | forward-head angle: ear in front of the shoulder, from vertical (complement of the craniovertebral angle) | ear draws back at least ~45% of up to 14 deg | the point is to reduce forward-head angle toward 0 |
+| Neck Rotation (`e30`) | frontal, `upper` | head yaw from the nose position across the head | turns past ~30 deg either side and returns (60 deg = full) | ~80 deg each way |
+| Neck Side Bend (`e31`) | frontal, `upper` | ear line minus shoulder line (head roll against the trunk) | tilts past ~15 deg either side and returns (30 deg = full) | ~40-45 deg each way |
+| Shoulder Flexion (`e13`) | side | hip-shoulder-elbow | arm past ~35% of 10-90 deg and returns | 180 deg full; extension 50-60 deg (printed on screen in the Physiotutors video) |
+| Shoulder Abduction (`e14`) | frontal | hip-shoulder-elbow, both arms | same | 180 deg full |
+
+The shoulder trackers target shoulder height (90 deg) because that is what the
+exercise instructions ask for, not the 180 deg end of range the video assesses.
+Standard end-of-range values are listed for context only.
+
+**Wrong form it catches, and what it says** (English / Hindi; each also has a
+short spoken line in both languages, see `feedbackMessages.js`):
+
+| Fault | How it is detected | English | Hindi |
+|---|---|---|---|
+| Nodding during a chin tuck | ear-to-nose line pitches >12 deg from resting | Keep your chin level | ठुड्डी सीधी रखें |
+| Shallow chin tuck / turn / bend | peak under 70-75% of the target | Draw your head a little further back; Turn a little further; Bring your ear a little closer to your shoulder | सिर को थोड़ा और पीछे खींचें; थोड़ा और घुमाएं; कान को कंधे की तरफ़ थोड़ा और झुकाएं |
+| Shoulders turning with the head | shoulder width <88% of resting | Keep your shoulders facing forward, turn only your neck | कंधे सामने की तरफ़ रखें, सिर्फ़ गर्दन घुमाएं |
+| Shoulder hiked to the ear in a side bend | shoulder line tilts >8 deg | Keep both shoulders level | दोनों कंधे बराबर रखें |
+| Shrugging while raising an arm | ear-to-shoulder gap <88% of resting, arm under ~110 deg | Don't shrug it up | कंधे को ढीला रखें, ऊपर न उचकाएं |
+| Leaning to lift the arm | shoulder-hip line moves >10 deg from resting | Don't lean your body to lift your arm | सीधे खड़े रहें, हाथ उठाने के लिए शरीर को न झुकाएं |
+| Bent elbow at the top | shoulder-elbow-wrist <150 deg near the top | Keep your elbow straight | कोहनी को सीधा रखें |
+| Jerky neck movement | speed above ~3 range-widths per second | Move your neck slowly and smoothly | गर्दन को धीरे-धीरे और आराम से घुमाएं |
+
+Seated neck exercises use the `upper` framing region (head and shoulders in
+frame; hips and legs not required), so they are not told to "move back" for
+body they never need.
+
+**Not built, and why.** Shoulder external/internal rotation: with the elbow
+bent and tucked against the ribs the forearm points at a frontal camera, so the
+rotation angle is nearly invisible in 2D. Neck flexion/extension ("look up and
+down"), lateral glide and half circle are documented by the videos but have no
+tracker yet. Shoulder extension would need a side camera and a different start
+posture from flexion.
+
+**Honest limits.** The thresholds above are drafts reasoned from the videos and
+standard ranges and checked against synthetic geometry only. They have not been
+validated on real patient footage, and the head-yaw and side-bend numbers in
+particular rest on a single 2D camera. Treat them as a starting point to tune,
+not as clinical measurements.
+
+## What the app says to a first-time patient
+
+A patient on their own at home can't ask "how far do I put the phone?", so the
+app says it out loud, in Hindi or English, and shows the same words on screen
+(`guideScript.js`, played by `useSpokenBriefing.js`, shown by `GuideCard.jsx`).
+
+| When | What is said | Where it comes from |
+|---|---|---|
+| On the exercise page, before Start | Where to put the phone, how far, what must be in view, and how to stand/sit/lie, in both languages | `cameraSetupTip()` in `trackedExercises.js` |
+| When the camera is ready (first time for that exercise) | 1. the set-up above, read aloud; 2. "Today's exercise is Neck Rotation. You'll do it ten times, and we'll count together"; 3. the first two instruction steps; 4. "go slowly and stop if you feel sharp pain; when the camera can see you we'll count 3, 2, 1" | `buildBriefing()` |
+| Same exercise, later visits | Only 2 and 4 (a long speech on every visit would just be skipped). A Skip button is always on screen | `createGuideMemory()` |
+| The 3, 2, 1 | Waits until the guide has finished talking, then runs | `holdStart` in `liveSession.js` |
+| Each rep | The number, then either that rep's correction, or how many are left | `repCallout()` |
+| Last rep | "Well done, all done!", and the screen waits for it to finish before closing (the next screen cancels any speech in progress, which would otherwise cut it off) | `whenIdle()` in `voiceCoach.js` |
+| Hold exercises | The hold time and how many times; seconds counted aloud with "just five more seconds"; each completed hold | `holdTick()`, `holdDoneCallout()` |
+
+Typical set-up distances (general guidance; the framing check still corrects the
+real shot): seated neck work about an arm's length (2-3 feet) at face height;
+standing exercises 6-8 feet (2 m) at waist height; lying exercises 5-6 feet
+(1.5-2 m) with the phone on the floor beside the mat; bridging 4-5 feet.
+
+During a set a correction always beats encouragement, so "keep your chin
+level" is never buried under "you're doing well". Plain middle reps say only the
+number, so the voice does not talk over the movement.
+
+The voice language is remembered between exercises (a Hindi speaker no longer
+re-taps "हिं" every time) and starts in Hindi on a Hindi device. If speech is
+off or unsupported the guide is skipped and the written tip stays on screen;
+that does not count as the patient having heard it.
+
+Not verified: how any real phone's Hindi voice sounds (device voices vary, and
+some have none installed), and the guide has not been run against a live camera,
+only against a fake speech engine and synthetic frames. Have a Hindi speaker
+listen to it on a real phone, and tune the wording and distances.

@@ -29,16 +29,19 @@ export const EXERCISES_SEED = [
   { id: "e26", name: "Piriformis Stretch", region: "Hip", difficulty: "Beginner", sets: 2, reps: "30 sec hold each side", rest: "—", frequency: "Daily", tracking: false },
   { id: "e27", name: "Prone Press-Up", region: "Lumbar", difficulty: "Beginner", sets: 1, reps: "10", rest: "—", frequency: "Daily", tracking: true },
   { id: "e28", name: "Standing Extension", region: "Lumbar", difficulty: "Beginner", sets: 1, reps: "10", rest: "—", frequency: "Daily", tracking: false },
+  { id: "e29", name: "Chin Tuck", region: "Neck", difficulty: "Beginner", sets: 3, reps: "10", rest: "30 sec", frequency: "Daily", tracking: true },
+  { id: "e30", name: "Neck Rotation", region: "Neck", difficulty: "Beginner", sets: 2, reps: "10", rest: "30 sec", frequency: "Daily", tracking: true },
+  { id: "e31", name: "Neck Side Bend", region: "Neck", difficulty: "Beginner", sets: 2, reps: "10", rest: "30 sec", frequency: "Daily", tracking: true },
 ];
 
 export const CONDITION_EXERCISE_MAP = {
   "Low Back Pain": ["e1", "e2", "e3", "e4", "e5", "e6", "e12"],
-  "Neck Pain": ["e7", "e1", "e6"],
+  "Neck Pain": ["e29", "e30", "e31", "e7", "e1", "e6"],
   "Post ACL Rehab": ["e9", "e15", "e16", "e11", "e8"],
   "Shoulder Pain": ["e13", "e14", "e6"],
 };
 
-export const REGIONS = ["All", "Core", "Lumbar", "Lumbar / Core", "Hip", "Spine", "Shoulder", "Lower Limb"];
+export const REGIONS = ["All", "Core", "Lumbar", "Lumbar / Core", "Hip", "Spine", "Neck", "Shoulder", "Lower Limb"];
 
 export const THERAPISTS_SEED = [
   { id: "t1", name: "Dr. Aditi" },
@@ -56,8 +59,8 @@ export const PATIENTS_SEED = [
 export const PROTOCOL_TEMPLATES = [
   { id: "tpl-lbp-beg", name: "Low Back Pain — Beginner", condition: "Low Back Pain", exerciseIds: ["e1", "e2", "e7", "e3"] },
   { id: "tpl-lbp-int", name: "Low Back Pain — Intermediate", condition: "Low Back Pain", exerciseIds: ["e2", "e3", "e4", "e5", "e6", "e12"] },
-  { id: "tpl-neck-beg", name: "Neck Pain — Beginner", condition: "Neck Pain", exerciseIds: ["e7", "e1"] },
-  { id: "tpl-neck-int", name: "Neck Pain — Intermediate", condition: "Neck Pain", exerciseIds: ["e7", "e1", "e6"] },
+  { id: "tpl-neck-beg", name: "Neck Pain — Beginner", condition: "Neck Pain", exerciseIds: ["e29", "e31", "e7", "e1"] },
+  { id: "tpl-neck-int", name: "Neck Pain — Intermediate", condition: "Neck Pain", exerciseIds: ["e29", "e30", "e31", "e7", "e1", "e6"] },
   { id: "tpl-acl", name: "Post-ACL — Progressive", condition: "Post ACL Rehab", exerciseIds: ["e9", "e15", "e16", "e11", "e8"] },
   { id: "tpl-shoulder", name: "Shoulder Pain — Beginner", condition: "Shoulder Pain", exerciseIds: ["e13", "e14", "e6"] },
 ];
@@ -157,6 +160,11 @@ export const INSTRUCTIONS_MAP = {
     { en: "Keep knees aligned with toes", hi: "घुटनों को पंजों की सीध में रखें" },
     { en: "Sit back down with control", hi: "नियंत्रण से वापस बैठ जाएं" },
   ],
+  e16: [
+    { en: "Stand tall, holding a wall or chair lightly for balance", hi: "सीधे खड़े हों, संतुलन के लिए दीवार या कुर्सी को हल्के से पकड़ें" },
+    { en: "Rise up onto your toes as high as you comfortably can", hi: "पंजों पर ऊपर उठें, जितना आराम से उठ सकें" },
+    { en: "Lower your heels back down slowly with control", hi: "एड़ियों को धीरे-धीरे नियंत्रण से वापस नीचे लाएं" },
+  ],
   e17: [
     { en: "Lie on your back, one knee bent with foot flat", hi: "पीठ के बल लेटें, एक घुटना मोड़ें और पैर ज़मीन पर सपाट रखें" },
     { en: "Extend the other leg straight, lifted off the floor", hi: "दूसरे पैर को सीधा रखें और ज़मीन से ऊपर उठाएं" },
@@ -227,6 +235,24 @@ export const INSTRUCTIONS_MAP = {
     { en: "Keep your lower back relaxed — this is a gentle press, not a strong push", hi: "कमर को ढीला रखें — यह हल्का दबाव है, ज़ोर से धक्का नहीं" },
     { en: "Lower back down with control", hi: "नियंत्रण से वापस नीचे आएं" },
     { en: "Often used for pain that centralizes with extension — check with your therapist which direction suits you", hi: "यह अक्सर उस दर्द के लिए उपयोग होता है जो पीछे झुकने से केंद्र की ओर आता है — अपने थेरेपिस्ट से पूछें कि कौन सी दिशा आपके लिए सही है" },
+  ],
+  e29: [
+    { en: "Sit tall, looking straight ahead, shoulders relaxed", hi: "सीधे बैठें, सामने देखें, कंधे ढीले रखें" },
+    { en: "Slide your head straight back, as if making a double chin — keep your chin level, don't nod", hi: "सिर को सीधा पीछे खिसकाएं, जैसे डबल चिन बना रहे हों — ठुड्डी सीधी रखें, नीचे न झुकाएं" },
+    { en: "Hold for a moment, then let your head slide forward to the start", hi: "थोड़ी देर रुकें, फिर सिर को वापस आगे लाएं" },
+    { en: "Go gently — a mild stretch is enough, never pain", hi: "आराम से करें — हल्का खिंचाव काफ़ी है, दर्द नहीं होना चाहिए" },
+  ],
+  e30: [
+    { en: "Sit tall and roll your shoulders back, then let them relax", hi: "सीधे बैठें और कंधों को पीछे की तरफ़ घुमाकर ढीला छोड़ें" },
+    { en: "Slowly turn your head to look over one shoulder, until you feel a gentle stretch", hi: "धीरे-धीरे सिर को एक तरफ़ घुमाएं और कंधे के ऊपर से देखें, जब तक हल्का खिंचाव महसूस हो" },
+    { en: "Keep your shoulders facing forward — turn only your neck", hi: "कंधे सामने की तरफ़ रखें — सिर्फ़ गर्दन घुमाएं" },
+    { en: "Come back to centre and turn to the other side. Don't push into pain", hi: "बीच में वापस आएं और दूसरी तरफ़ घुमाएं। दर्द में ज़ोर न लगाएं" },
+  ],
+  e31: [
+    { en: "Sit tall, shoulders relaxed and level", hi: "सीधे बैठें, कंधे ढीले और बराबर रखें" },
+    { en: "Slowly tilt your ear toward your shoulder, as if lengthening the side of your neck", hi: "धीरे-धीरे कान को कंधे की तरफ़ झुकाएं, जैसे गर्दन की साइड को लंबा कर रहे हों" },
+    { en: "Don't lift your shoulder up to meet your ear", hi: "कंधे को कान की तरफ़ ऊपर न उठाएं" },
+    { en: "Come back to centre and bend to the other side", hi: "बीच में वापस आएं और दूसरी तरफ़ झुकाएं" },
   ],
   e28: [
     { en: "Stand tall, feet hip-width apart", hi: "सीधे खड़े हों, पैर कूल्हों जितनी दूरी पर हों" },

@@ -8,6 +8,9 @@
 // `voiceEn`/`voiceHi` are short directive phrases for the live voice coach
 // (voiceCoach.js) — full sentences are too slow to hear mid-rep, so these
 // are the 1-3 word version a real trainer would actually shout out.
+// Exception: the cameraSetupTip* entries — their voice lines are the full
+// sentence, because they are read out once in the first-time guide (guideScript.js)
+// before any exercise starts, not shouted mid-rep.
 
 export const FEEDBACK_MESSAGES = {
   slowerReps: {
@@ -138,10 +141,16 @@ export const FEEDBACK_MESSAGES = {
     voiceHi: "आप दिख नहीं रहे",
   },
   cameraSetupTipFrontal: {
-    en: "Face the camera directly. Prop your phone so your head, hands, and feet are all in frame.",
-    hi: "कैमरे के सामने सीधे खड़े हों। फ़ोन को इस तरह रखें कि सिर, हाथ और पैर — सभी फ्रेम में दिखें।",
-    voiceEn: "Face the camera",
-    voiceHi: "कैमरे के सामने खड़े हों",
+    en: "Prop your phone at waist height, about 6 to 8 feet (2 metres) away, and stand facing it. Your whole body, at least from head to knees, should be in view.",
+    hi: "फ़ोन को कमर की ऊंचाई पर, लगभग छह से आठ फ़ुट (दो मीटर) दूर टिकाएं और उसके सामने खड़े हों। आपका पूरा शरीर, कम से कम सिर से घुटनों तक, दिखना चाहिए।",
+    voiceEn: "Prop your phone at waist height, about six to eight feet away, and stand facing it. Your whole body, at least from head to knees, should be in view.",
+    voiceHi: "फ़ोन को कमर की ऊंचाई पर, लगभग छह से आठ फ़ुट दूर टिकाएं और उसके सामने खड़े हों। आपका पूरा शरीर, कम से कम सिर से घुटनों तक, दिखना चाहिए।",
+  },
+  cameraSetupTipStandingSide: {
+    en: "Prop your phone at waist height, about 6 to 8 feet (2 metres) away, and stand with your side to it. Your whole body, at least from head to knees, should be in view.",
+    hi: "फ़ोन को कमर की ऊंचाई पर, लगभग छह से आठ फ़ुट (दो मीटर) दूर टिकाएं और उसकी तरफ़ बग़ल करके खड़े हों। आपका पूरा शरीर, कम से कम सिर से घुटनों तक, दिखना चाहिए।",
+    voiceEn: "Prop your phone at waist height, about six to eight feet away, and stand with your side to it. Your whole body, at least from head to knees, should be in view.",
+    voiceHi: "फ़ोन को कमर की ऊंचाई पर, लगभग छह से आठ फ़ुट दूर टिकाएं और उसकी तरफ़ बग़ल करके खड़े हों। आपका पूरा शरीर, कम से कम सिर से घुटनों तक, दिखना चाहिए।",
   },
   // Spoken confirmation for the air-gesture "point and hold" control — the
   // screen changes too, but the whole point is not needing to look at it.
@@ -170,16 +179,16 @@ export const FEEDBACK_MESSAGES = {
     voiceHi: "शुरू",
   },
   cameraSetupTipLowerBody: {
-    en: "Lie side-on to the camera. Prop your phone so your hips, knees and feet are in frame — your head doesn't need to be.",
-    hi: "कैमरे के सामने बग़ल में लेटें। फ़ोन को इस तरह रखें कि कूल्हे, घुटने और पैर फ्रेम में दिखें — सिर का दिखना ज़रूरी नहीं।",
-    voiceEn: "Lie side-on to the camera",
-    voiceHi: "बग़ल में लेटें",
+    en: "Put your phone on the floor, about 4 to 5 feet (1.2 to 1.5 metres) away, and lie with your side to it. Your hips, knees and feet should be in view — your head doesn't need to be.",
+    hi: "फ़ोन को ज़मीन के पास, लगभग चार से पांच फ़ुट (सवा से डेढ़ मीटर) दूर रखें और उसकी तरफ़ बग़ल करके लेटें। आपके कूल्हे, घुटने और पैर दिखने चाहिए — सिर का दिखना ज़रूरी नहीं।",
+    voiceEn: "Put your phone on the floor, about four to five feet away, and lie with your side to it. Your hips, knees and feet should be in view. Your head doesn't need to be.",
+    voiceHi: "फ़ोन को ज़मीन के पास, लगभग चार से पांच फ़ुट दूर रखें और उसकी तरफ़ बग़ल करके लेटें। आपके कूल्हे, घुटने और पैर दिखने चाहिए। सिर का दिखना ज़रूरी नहीं।",
   },
   cameraSetupTipSide: {
-    en: "Lie down side-on to the camera. Prop your phone so your head, hands, and feet are all in frame.",
-    hi: "कैमरे के सामने बग़ल में लेटें। फ़ोन को इस तरह रखें कि सिर, हाथ और पैर — सभी फ्रेम में दिखें।",
-    voiceEn: "Lie side-on to the camera",
-    voiceHi: "बग़ल में लेटें",
+    en: "Put your phone on the floor beside your mat, about 5 to 6 feet (1.5 to 2 metres) away, and lie with your side to it. Your whole body, from head to feet, should be in view.",
+    hi: "फ़ोन को चटाई के बगल में ज़मीन के पास, लगभग पांच से छह फ़ुट (डेढ़ से दो मीटर) दूर रखें और उसकी तरफ़ बग़ल करके लेटें। सिर से पैर तक आपका पूरा शरीर दिखना चाहिए।",
+    voiceEn: "Put your phone on the floor beside your mat, about five to six feet away, and lie with your side to it. Your whole body, from head to feet, should be in view.",
+    voiceHi: "फ़ोन को चटाई के बगल में ज़मीन के पास, लगभग पांच से छह फ़ुट दूर रखें और उसकी तरफ़ बग़ल करके लेटें। सिर से पैर तक आपका पूरा शरीर दिखना चाहिए।",
   },
   goodSquat: {
     good: true,
@@ -311,5 +320,122 @@ export const FEEDBACK_MESSAGES = {
     hi: "कूल्हों को ऊपर रखें, झुकने न दें",
     voiceEn: "Hips up",
     voiceHi: "कूल्हे ऊपर",
+  },
+
+  // --- Seated neck exercises: framing / setup (head and shoulders only) ---
+  moveBackUpperBody: {
+    en: "Your head and both shoulders need to be in frame — move your phone back a little",
+    hi: "आपका सिर और दोनों कंधे फ्रेम में दिखने चाहिए — फ़ोन को थोड़ा पीछे करें",
+    voiceEn: "Move back a little",
+    voiceHi: "थोड़ा पीछे हटें",
+  },
+  cameraSetupTipSeatedFrontal: {
+    en: "Sit tall on a chair facing the phone. Prop it at face height, about an arm's length away (2 to 3 feet), so your head and both shoulders are clearly in view.",
+    hi: "फ़ोन के सामने कुर्सी पर सीधे बैठें। फ़ोन को चेहरे की ऊंचाई पर, एक हाथ की दूरी यानी दो से तीन फ़ुट पर टिकाएं, ताकि आपका सिर और दोनों कंधे साफ़ दिखें।",
+    voiceEn: "Sit tall on a chair facing the phone. Prop it at face height, about an arm's length away, two to three feet, so your head and both shoulders are clearly in view.",
+    voiceHi: "फ़ोन के सामने कुर्सी पर सीधे बैठें। फ़ोन को चेहरे की ऊंचाई पर, एक हाथ की दूरी यानी दो से तीन फ़ुट पर टिकाएं, ताकि आपका सिर और दोनों कंधे साफ़ दिखें।",
+  },
+  cameraSetupTipSeatedSide: {
+    en: "Sit tall on a chair with your side to the phone. Prop it at head height, about 3 feet away, so your head and shoulder are clearly in view.",
+    hi: "कुर्सी पर सीधे इस तरह बैठें कि आपकी बग़ल फ़ोन की तरफ़ हो। फ़ोन को सिर की ऊंचाई पर, लगभग तीन फ़ुट दूर टिकाएं, ताकि आपका सिर और कंधा साफ़ दिखें।",
+    voiceEn: "Sit tall on a chair with your side to the phone. Prop it at head height, about three feet away, so your head and shoulder are clearly in view.",
+    voiceHi: "कुर्सी पर सीधे इस तरह बैठें कि आपकी बग़ल फ़ोन की तरफ़ हो। फ़ोन को सिर की ऊंचाई पर, लगभग तीन फ़ुट दूर टिकाएं, ताकि आपका सिर और कंधा साफ़ दिखें।",
+  },
+
+  // --- Chin tuck (cervical retraction) ---
+  tuckFurther: {
+    en: "Draw your head a little further back",
+    hi: "सिर को थोड़ा और पीछे खींचें",
+    voiceEn: "Head back",
+    voiceHi: "सिर पीछे",
+  },
+  keepChinLevel: {
+    en: "Keep your chin level — slide your head straight back, don't nod",
+    hi: "ठुड्डी सीधी रखें — सिर को सीधा पीछे खिसकाएं, नीचे न झुकाएं",
+    voiceEn: "Chin level",
+    voiceHi: "ठुड्डी सीधी",
+  },
+  goodChinTuck: {
+    good: true,
+    en: "Good — head drawn straight back, chin level",
+    hi: "बढ़िया — सिर सीधा पीछे गया, ठुड्डी सीधी रही",
+    voiceEn: "Good",
+    voiceHi: "बढ़िया",
+  },
+
+  // --- Neck rotation (look right / look left) ---
+  turnFurther: {
+    en: "Turn a little further, until you feel a gentle stretch",
+    hi: "थोड़ा और घुमाएं, जब तक हल्का खिंचाव महसूस न हो",
+    voiceEn: "Turn a bit more",
+    voiceHi: "थोड़ा और घुमाएं",
+  },
+  keepShouldersSquare: {
+    en: "Keep your shoulders facing forward — turn only your neck",
+    hi: "कंधे सामने की तरफ़ रखें — सिर्फ़ गर्दन घुमाएं",
+    voiceEn: "Shoulders still",
+    voiceHi: "कंधे स्थिर",
+  },
+  goodNeckRotation: {
+    good: true,
+    en: "Smooth, easy turn — nicely done",
+    hi: "आराम से घुमाया — बहुत अच्छा",
+    voiceEn: "Good",
+    voiceHi: "बढ़िया",
+  },
+
+  // --- Neck side bend (ear toward shoulder) ---
+  bendFurther: {
+    en: "Bring your ear a little closer to your shoulder",
+    hi: "कान को कंधे की तरफ़ थोड़ा और झुकाएं",
+    voiceEn: "Ear to shoulder",
+    voiceHi: "कान कंधे की तरफ़",
+  },
+  shouldersLevel: {
+    en: "Keep both shoulders level — don't lift your shoulder up to your ear",
+    hi: "दोनों कंधे बराबर रखें — कंधे को कान की तरफ़ ऊपर न उठाएं",
+    voiceEn: "Shoulders level",
+    voiceHi: "कंधे बराबर",
+  },
+  goodNeckSideBend: {
+    good: true,
+    en: "Good side stretch, shoulders stayed level",
+    hi: "बढ़िया खिंचाव, कंधे बराबर रहे",
+    voiceEn: "Good",
+    voiceHi: "बढ़िया",
+  },
+
+  // --- Neck: shared ---
+  slowNeck: {
+    en: "Move your neck slowly and smoothly — no jerking",
+    hi: "गर्दन को धीरे-धीरे और आराम से घुमाएं — झटका न दें",
+    voiceEn: "Slowly",
+    voiceHi: "धीरे-धीरे",
+  },
+
+  // --- Shoulder raise: compensation cues (flexion + abduction) ---
+  dontShrug: {
+    en: "Keep your shoulder relaxed — don't shrug it up",
+    hi: "कंधे को ढीला रखें — ऊपर न उचकाएं",
+    voiceEn: "Relax shoulders",
+    voiceHi: "कंधे ढीले",
+  },
+  standTallNoLean: {
+    en: "Stand tall — don't lean your body to lift your arm",
+    hi: "सीधे खड़े रहें — हाथ उठाने के लिए शरीर को न झुकाएं",
+    voiceEn: "Stand tall",
+    voiceHi: "सीधे खड़े रहें",
+  },
+  elbowStraight: {
+    en: "Keep your elbow straight",
+    hi: "कोहनी को सीधा रखें",
+    voiceEn: "Elbow straight",
+    voiceHi: "कोहनी सीधी",
+  },
+  raiseArmHigher: {
+    en: "Raise your arm a little higher, up to shoulder height",
+    hi: "हाथ को थोड़ा और ऊपर उठाएं, कंधे की ऊंचाई तक",
+    voiceEn: "A bit higher",
+    voiceHi: "थोड़ा और ऊपर",
   },
 };

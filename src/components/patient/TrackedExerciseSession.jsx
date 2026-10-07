@@ -4,10 +4,13 @@ import { parseRepsTarget } from "../../lib/helpers.js";
 import { createLiveSession } from "../../lib/liveSession.js";
 import { getLandmarker } from "../../lib/landmarker.js";
 import { FEEDBACK_MESSAGES as M } from "../../lib/feedbackMessages.js";
-import { TRACKER_CAMERA_ORIENTATION, TRACKER_FRAMING_REGION } from "../../lib/trackedExercises.js";
-import { createVoiceCoach } from "../../lib/voiceCoach.js";
+import { TRACKER_CAMERA_ORIENTATION, TRACKER_FRAMING_REGION, cameraSetupTip } from "../../lib/trackedExercises.js";
+import { createVoiceCoach, preferredVoiceLang, rememberVoiceLang } from "../../lib/voiceCoach.js";
 import { numberWord } from "../../lib/numberWords.js";
+import { repCallout } from "../../lib/guideScript.js";
 import AirPointerOverlay from "./AirPointerOverlay.jsx";
+import GuideCard from "./GuideCard.jsx";
+import { useSpokenBriefing } from "./useSpokenBriefing.js";
 
 /**
  * Real camera + MediaPipe Pose Landmarker exercise-tracking screen. Generic —
@@ -33,15 +36,17 @@ import AirPointerOverlay from "./AirPointerOverlay.jsx";
  */
 
 // Which message to show/speak for each stable framing problem (see poseQuality.js).
-// The 'lower' region (bridging) names what it actually needs: hips, knees and feet.
+// The 'lower' region (bridging) names what it actually needs: hips, knees and feet;
+// the 'upper' region (seated neck work) asks for head and shoulders only.
 const framingMessages = (region) => ({
   no_person: M.noPersonDetected,
-  cut_off: region === "lower" ? M.moveBackLowerBody : M.moveBackFullBody,
+  cut_off: region === "lower" ? M.moveBackLowerBody : region === "upper" ? M.moveBackUpperBody : M.moveBackFullBody,
   too_small: M.moveCloser,
   low_confidence: M.lowConfidence,
 });
 
 const CONNECTIONS = [
+  [7, 0], [0, 8], [7, 8], // head: ear line + nose, so neck tilt/turn is visible on screen
   [11, 12], [11, 23], [12, 24], [23, 24],
   [11, 13], [13, 15], [12, 14], [14, 16],
   [23, 25], [25, 27], [24, 26], [26, 28],
@@ -72,9 +77,7 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
   // render the effect started in — so it must read live values from refs, not state.
   const repsRef = useRef(0);
   const elapsedRef = useRef(0);
-  const setupTip = region === "lower"
-    ? M.cameraSetupTipLowerBody
-    : orientation === "side" ? M.cameraSetupTipSide : M.cameraSetupTipFrontal;
+  const setupTip = cameraSetupTip(ex.id);
 
   const [status, setStatus] = useState("loading"); // loading | ready | denied | error
   const [running, setRunning] = useState(true);
@@ -89,9 +92,19 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
   const [hint, setHint] = useState(null);    // e.g. 'calibrating'
 
   const [voiceOn, setVoiceOn] = useState(voiceCoachRef.current.isSupported());
-  const [voiceLang, setVoiceLang] = useState("en"); // 'en' | 'hi'
+  const [voiceLang, setVoiceLang] = useState(() => preferredVoiceLang()); // 'en' | 'hi' — last choice, else the device language
+  const chooseLang = (lang) => { setVoiceOn(true); setVoiceLang(lang); rememberVoiceLang(lang); };
   const [gestureOn, setGestureOn] = useState(true); // air-gesture "point and hold" control, on by default
   const [handLandmarks, setHandLandmarks] = useState(null); // this frame's landmarks, for AirPointerOverlay
+
+  // The spoken first-time guide (where to put the phone and how far, what the
+  // exercise is, how many, how it is done). Holds back the "3, 2, 1" until it ends.
+  const framingRef = useRef("initializing");
+  const guide = useSpokenBriefing({
+    voiceCoachRef, status, ex, targetReps,
+    // Prompts that were swallowed while the guide talked: say the current one now.
+    onDone: () => { const m = FRAMING_MESSAGE[framingRef.current]; if (m) voiceCoachRef.current.speak(m, `framing-${framingRef.current}`); },
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -139,7 +152,8 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
 
             // One call does smoothing, framing, the "Let's get started in 3, 2, 1"
             // countdown and the tracker (liveSession.js). Nothing counts until Go.
-            const r = sessionRef.current.process(rawLandmarks, nowMs, { aspect: video.videoWidth / video.videoHeight });
+            const r = sessionRef.current.process(rawLandmarks, nowMs, { aspect: video.videoWidth / video.videoHeight, holdStart: guide.activeRef.current });
+            framingRef.current = r.framing.status;
             drawOverlay(canvas, video, r.landmarks);
             setHandLandmarks(r.landmarks);
             setFraming(r.framing.status);
@@ -161,7 +175,9 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
             for (const ev of r.events) speakEvent(ev);
 
             if (r.finished) {
-              finish();
+              // Let the last count and "well done" finish being said before the
+              // next screen takes over (it cancels any speech in progress).
+              voiceCoachRef.current.whenIdle(finish);
               return;
             }
           } catch (err) {
@@ -211,12 +227,9 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
       // Always announce the count out loud on every completed rep — the whole
       // point if you're not looking at the screen. Fold in a correction too when
       // one's active that rep, same utterance.
-      const num = numberWord(ev.count, "en"), numHi = numberWord(ev.count, "hi");
-      const c = ev.correction;
-      voice.speak(
-        c ? { voiceEn: `${num}. ${c.voiceEn}`, voiceHi: `${numHi}. ${c.voiceHi}` } : { voiceEn: num, voiceHi: numHi },
-        `rep-${ev.count}`
-      );
+      // The number, then either the correction for that rep, or how many are
+      // left / a word of encouragement (see repCallout in guideScript.js).
+      voice.speak(repCallout({ count: ev.count, target: targetReps, correction: ev.correction }), `rep-${ev.count}`);
     } else if (ev.type === "framing") {
       const msg = FRAMING_MESSAGE[ev.status];
       if (msg) voice.speak(msg, `framing-${ev.status}`);
@@ -295,13 +308,13 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
           {voiceCoachRef.current.isSupported() && (
             <div className="flex items-center gap-0.5 bg-gray-100 rounded-full p-0.5">
               <button
-                onClick={() => { setVoiceOn(true); setVoiceLang("en"); }}
+                onClick={() => chooseLang("en")}
                 className={`px-2 py-1 rounded-full text-[10px] font-semibold ${voiceOn && voiceLang === "en" ? "bg-white shadow-sm text-violet-700" : "text-gray-400"}`}
               >
                 EN
               </button>
               <button
-                onClick={() => { setVoiceOn(true); setVoiceLang("hi"); }}
+                onClick={() => chooseLang("hi")}
                 className={`px-2 py-1 rounded-full text-[10px] font-semibold ${voiceOn && voiceLang === "hi" ? "bg-white shadow-sm text-violet-700" : "text-gray-400"}`}
               >
                 हिं
@@ -362,15 +375,21 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
               <span className="bg-black/50 text-white text-xs px-3 py-1.5 rounded-full">{formatTime(elapsed)}</span>
               <span className="bg-black/50 text-white text-xs px-3 py-1.5 rounded-full">{reps} / {targetReps} reps</span>
             </div>
-            <div className="bg-black/40 text-white text-[11px] px-3 py-1.5 rounded-xl text-center leading-snug">
-              <span className="block">{setupTip.en}</span>
-              <span className="block text-gray-300" lang="hi">{setupTip.hi}</span>
-            </div>
+            {/* The written set-up tip (with the distance) stays up until counting starts. */}
+            {!started && !guide.line && (
+              <div className="bg-black/40 text-white text-[11px] px-3 py-1.5 rounded-xl text-center leading-snug">
+                <span className="block">{setupTip.en}</span>
+                <span className="block text-gray-300" lang="hi">{setupTip.hi}</span>
+              </div>
+            )}
           </div>
         )}
 
+        {/* The spoken guide, shown as text while it is being said. */}
+        {status === "ready" && <GuideCard line={guide.line} onSkip={guide.skip} />}
+
         {/* Not armed yet: nothing is counted until the camera sees you clearly. */}
-        {status === "ready" && !armed && (
+        {status === "ready" && !armed && !guide.line && (
           <div className="absolute bottom-3 left-3 right-3 bg-black/70 text-white text-xs px-3 py-2 rounded-xl text-center">
             <span className="block font-medium">{M.getInPosition.en}</span>
             <span className="block text-gray-300" lang="hi">{M.getInPosition.hi}</span>
@@ -381,7 +400,7 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
         )}
 
         {/* Armed but the view has been bad for ~1.5 s (debounced — never a single-frame flash). */}
-        {status === "ready" && armed && FRAMING_MESSAGE[framing] && (
+        {status === "ready" && armed && !guide.line && FRAMING_MESSAGE[framing] && (
           <div className={`absolute bottom-3 left-3 right-3 text-white text-xs px-3 py-2 rounded-xl text-center ${framing === "no_person" ? "bg-rose-600/90" : "bg-amber-600/90"}`}>
             <span className="block font-medium">{FRAMING_MESSAGE[framing].en}</span>
             <span className="block" lang="hi">{FRAMING_MESSAGE[framing].hi}</span>

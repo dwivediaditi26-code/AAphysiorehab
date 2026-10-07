@@ -36,6 +36,7 @@
 import { angleAtAspect, clamp01 } from "./trackingMath.js";
 import { FEEDBACK_MESSAGES as M } from "./feedbackMessages.js";
 import { createRepCounter } from "./repCounter.js";
+import { createShoulderFormWatch } from "./shoulderForm.js";
 
 const CHAIN = {
   left: { hip: 23, shoulder: 11, elbow: 13 },
@@ -46,9 +47,11 @@ export function createShoulderFlexionTracker(config = {}) {
   const REST_ANGLE = config.restAngle ?? 10;     // deg, arm relaxed at the side
   const TARGET_ANGLE = config.targetAngle ?? 90;  // deg, "raise forward to shoulder height"
   const SPEED_FLAG = config.speedFlag ?? 3.5;     // range-widths / second, framerate independent
+  const SHALLOW_PEAK = config.shallowPeak ?? 0.75; // < ~70 deg of arm elevation
 
   const counter = createRepCounter({ enter: config.enter ?? 0.35, exit: config.exit ?? 0.18, minPeak: config.minPeak ?? 0.3 });
-  const state = { lastExt: 0, side: "left", history: [], maxRate: 0, feedbackFlags: new Set() };
+  const watch = createShoulderFormWatch(config.form);
+  const state = { lastExt: 0, peak: 0, side: "left", history: [], maxRate: 0, feedbackFlags: new Set() };
 
   function chooseSide(landmarks) {
     const vis = (i) => landmarks[i].visibility ?? 1;
@@ -68,7 +71,10 @@ export function createShoulderFlexionTracker(config = {}) {
       const ext = clamp01((angle - REST_ANGLE) / (TARGET_ANGLE - REST_ANGLE));
 
       const wasActive = counter.isActive();
+      watch.update(landmarks, { sides: [state.side], aspect: meta.aspect, active: wasActive, armAngle: angle, ext });
       if (wasActive) {
+        if (ext > state.peak) state.peak = ext;
+        watch.latch(state.feedbackFlags);
         state.history.push({ t: now, ext });
         while (state.history.length && now - state.history[0].t > 300) state.history.shift();
         const ref = state.history.find((h) => now - h.t >= 100);
@@ -83,10 +89,12 @@ export function createShoulderFlexionTracker(config = {}) {
 
       const completed = counter.update(ext, now);
       if (completed && state.maxRate > SPEED_FLAG) state.feedbackFlags.add("speed");
+      if (completed && state.peak < SHALLOW_PEAK) state.feedbackFlags.add("shallow");
 
       if (!wasActive && counter.isActive()) {
         state.feedbackFlags = new Set();
-        state.maxRate = 0; state.history = [];
+        state.maxRate = 0; state.history = []; state.peak = ext;
+        watch.startRep();
       }
 
       return state;
@@ -94,13 +102,17 @@ export function createShoulderFlexionTracker(config = {}) {
     getRepCount() { return counter.getRepCount(); },
     getFeedback() {
       const out = [];
+      if (state.feedbackFlags.has("lean")) out.push(M.standTallNoLean);
+      if (state.feedbackFlags.has("shrug")) out.push(M.dontShrug);
+      if (state.feedbackFlags.has("elbow")) out.push(M.elbowStraight);
       if (state.feedbackFlags.has("speed")) out.push(M.slowerRiseLower);
+      if (state.feedbackFlags.has("shallow")) out.push(M.raiseArmHigher);
       if (out.length === 0) out.push(M.goodShoulderFlexion);
       return out;
     },
     reset() {
-      counter.reset();
-      state.lastExt = 0; state.side = "left"; state.history = []; state.maxRate = 0; state.feedbackFlags = new Set();
+      counter.reset(); watch.reset();
+      state.lastExt = 0; state.peak = 0; state.side = "left"; state.history = []; state.maxRate = 0; state.feedbackFlags = new Set();
     },
   };
 }
