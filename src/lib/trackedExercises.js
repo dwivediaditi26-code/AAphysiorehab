@@ -33,6 +33,10 @@ import { createSideLyingLegRaiseTracker } from "./sideLyingLegRaiseTracker.js";
 import { createSidePlankTracker } from "./sidePlankTracker.js";
 import { createFrontPlankTracker } from "./frontPlankTracker.js";
 import { createAdductorSqueezeTracker } from "./adductorSqueezeTracker.js";
+import { createChinTuckTracker } from "./chinTuckTracker.js";
+import { createNeckRotationTracker } from "./neckRotationTracker.js";
+import { createNeckSideBendTracker } from "./neckSideBendTracker.js";
+import { FEEDBACK_MESSAGES as M } from "./feedbackMessages.js";
 
 export const TRACKED_EXERCISE_COMPONENTS = {
   e4: createDeadBugTracker,             // Dead Bug — lying down, side view
@@ -48,6 +52,9 @@ export const TRACKED_EXERCISE_COMPONENTS = {
   e22: createSupermanTracker,           // Superman — prone, side view
   e27: createPronePressUpTracker,       // Prone Press-Up — prone, side view
   e19: createSideLyingLegRaiseTracker,  // Side-Lying Leg Raise — side-lying, side view
+  e29: createChinTuckTracker,           // Chin Tuck — seated, side view, head + shoulders in frame
+  e30: createNeckRotationTracker,       // Neck Rotation — seated, frontal, head + shoulders in frame
+  e31: createNeckSideBendTracker,       // Neck Side Bend — seated, frontal, head + shoulders in frame
 };
 
 // Hold-based exercises — a separate registry from the rep-based one above,
@@ -70,9 +77,14 @@ export const HOLD_TRACKED_EXERCISES = {
 // 'lower' = the pelvis and lower limb only (hip-knee-ankle): bridging, where
 // the phone is usually close enough that the head and shoulders are out of
 // shot, and the tracker reads the pelvis and thigh, not the torso.
+// 'upper' = the head and shoulders only (any camera orientation): seated neck
+// exercises, where the hips and legs are out of shot by design.
 export const TRACKER_FRAMING_REGION = {
   e3: "lower",   // Glute Bridge
   e17: "lower",  // Single Leg Bridge
+  e29: "upper",  // Chin Tuck
+  e30: "upper",  // Neck Rotation
+  e31: "upper",  // Neck Side Bend
 };
 
 // Which camera orientation each tracked exercise expects — drives the
@@ -95,4 +107,16 @@ export const TRACKER_CAMERA_ORIENTATION = {
   e6: "side",
   e23: "side",
   e20: "side",
+  e29: "side",
+  e30: "frontal",
+  e31: "frontal",
 };
+
+/** The on-screen / spoken camera set-up instruction for an exercise. */
+export function cameraSetupTip(exerciseId) {
+  const orientation = TRACKER_CAMERA_ORIENTATION[exerciseId];
+  const region = TRACKER_FRAMING_REGION[exerciseId];
+  if (region === "upper") return orientation === "side" ? M.cameraSetupTipSeatedSide : M.cameraSetupTipSeatedFrontal;
+  if (region === "lower") return M.cameraSetupTipLowerBody;
+  return orientation === "side" ? M.cameraSetupTipSide : M.cameraSetupTipFrontal;
+}

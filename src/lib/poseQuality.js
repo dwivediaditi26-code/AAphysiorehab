@@ -21,7 +21,14 @@
  *   - "Armed" latch: rep counting only starts once the setup has been
  *     good for a moment, so walking onto the mat can't count phantom reps.
  *
- * Framing REGIONS (side view only): what has to be inside the frame.
+ * Framing REGIONS: what has to be inside the frame.
+ *   'upper' — head and shoulders only (any orientation). For seated neck
+ *             exercises, where the phone is close and the hips and legs are out
+ *             of shot by design. Frontal needs nose, both ears, both shoulders;
+ *             side needs the nose plus the near-side ear and shoulder. Same
+ *             lenient edge handling as 'lower' (a laptop webcam puts the
+ *             shoulders right on the bottom edge). Without this a neck exercise
+ *             would be told "move back" forever for hips it never needs.
  *   'whole' — near-side shoulder, hip, knee, ankle. For lying exercises that
  *             read the torso (dead bug, bird dog, planks...).
  *   'lower' — near-side hip, knee, ankle: the pelvis and a lower limb. For
@@ -33,15 +40,17 @@
  *             size on the pelvis-to-ankle chain, aspect-corrected.
  */
 import { createLandmarkSmoother } from "./landmarkSmoother.js";
-import { hasMinimalPose, hasLowerBody } from "./trackingMath.js";
+import { hasMinimalPose, hasLowerBody, hasUpperBody } from "./trackingMath.js";
 
 const SIDE = {
-  left: { shoulder: 11, hip: 23, knee: 25, ankle: 27 },
-  right: { shoulder: 12, hip: 24, knee: 26, ankle: 28 },
+  left: { ear: 7, shoulder: 11, hip: 23, knee: 25, ankle: 27 },
+  right: { ear: 8, shoulder: 12, hip: 24, knee: 26, ankle: 28 },
 };
 
 const WHOLE_JOINTS = ["shoulder", "hip", "knee", "ankle"];
 const LOWER_JOINTS = ["hip", "knee", "ankle"];
+const UPPER_JOINTS = ["ear", "shoulder"];
+const UPPER_MIN_EXTENT = 0.1; // head-to-shoulder span / larger image side (draft: no real close-up neck footage yet)
 // A joint counts as cut off only when it is more than this far OUTSIDE the
 // image (MediaPipe extrapolates missing joints beyond 0..1). Negative = allowed
 // overshoot, so a joint sitting on the very edge is not a "move back".
@@ -70,23 +79,29 @@ const outOfFrame = (p, margin) => p.x < margin || p.x > 1 - margin || p.y < marg
  * turn a stream of these into a stable, non-flickering status.
  *
  * status: 'ok' | 'no_person' | 'cut_off' | 'too_small' | 'low_confidence'
- * region: 'whole' | 'lower' (side view only — see the header). aspect =
- * videoWidth / videoHeight, used to judge size in the 'lower' region.
+ * region: 'whole' | 'lower' (side view only) | 'upper' (any view) — see the
+ * header. aspect = videoWidth / videoHeight, used to judge size in the
+ * 'lower' and 'upper' regions.
  * prevSide: the side chosen last frame (keeps the near side from flip-flopping).
  */
 export function assessFraming(landmarks, { orientation = "frontal", region = "whole", margin, aspect, prevSide = null } = {}) {
   const lower = orientation === "side" && region === "lower";
-  if (!landmarks || landmarks.length < 29 || !(lower ? hasLowerBody(landmarks) : hasMinimalPose(landmarks))) {
+  const upper = region === "upper";
+  const present = upper ? hasUpperBody(landmarks) : lower ? hasLowerBody(landmarks) : hasMinimalPose(landmarks);
+  if (!landmarks || landmarks.length < 29 || !present) {
     return { status: "no_person", cutOff: [], side: null };
   }
-  const edge = margin ?? (lower ? LOWER_MARGIN : 0.02);
+  const edge = margin ?? (lower || upper ? LOWER_MARGIN : 0.02);
 
   let required; // [name, index]
   let side = null;
   if (orientation === "side") {
-    const joints = lower ? LOWER_JOINTS : WHOLE_JOINTS;
+    const joints = upper ? UPPER_JOINTS : lower ? LOWER_JOINTS : WHOLE_JOINTS;
     side = nearSide(landmarks, { prev: prevSide, joints });
     required = joints.map((name) => [name, SIDE[side][name]]);
+    if (upper) required.unshift(["nose", 0]);
+  } else if (upper) {
+    required = [["nose", 0], ["ear", 7], ["ear", 8], ["shoulder", 11], ["shoulder", 12]];
   } else {
     // Frontal: both sides are visible, but webcams at desk height rarely
     // see feet, so require shoulders/hips/knees only.
@@ -104,12 +119,12 @@ export function assessFraming(landmarks, { orientation = "frontal", region = "wh
   // Size: model accuracy drops when the person is a small blob in the frame.
   const xs = pts.map(({ p }) => p.x), ys = pts.map(({ p }) => p.y);
   const xSpan = Math.max(...xs) - Math.min(...xs), ySpan = Math.max(...ys) - Math.min(...ys);
-  if (lower) {
+  if (lower || upper) {
     // Same units on both axes (x * aspect), relative to the larger image side —
     // the model's working resolution follows the larger side, so a phone held
     // portrait or landscape is judged the same way.
     const a = aspect && isFinite(aspect) ? aspect : 1;
-    if (Math.max(xSpan * a, ySpan) / Math.max(1, a) < LOWER_MIN_EXTENT) return { status: "too_small", cutOff: [], side };
+    if (Math.max(xSpan * a, ySpan) / Math.max(1, a) < (upper ? UPPER_MIN_EXTENT : LOWER_MIN_EXTENT)) return { status: "too_small", cutOff: [], side };
   } else if (Math.max(xSpan, ySpan) < (orientation === "side" ? 0.28 : 0.3)) {
     return { status: "too_small", cutOff: [], side };
   }
@@ -172,6 +187,7 @@ export function createPoseQuality({ orientation = "frontal", region = "whole", s
   const sm = smoother || createLandmarkSmoother();
   const mon = monitor || createFramingMonitor();
   const lower = orientation === "side" && region === "lower";
+  const upper = region === "upper";
   let armed = false;
   let side = null; // last near side — keeps the choice from flip-flopping frame to frame
 
@@ -185,7 +201,7 @@ export function createPoseQuality({ orientation = "frontal", region = "whole", s
       if (framing.status === "ok") armed = true;
       return {
         landmarks,
-        trackable: lower ? hasLowerBody(landmarks) : hasMinimalPose(landmarks),
+        trackable: upper ? hasUpperBody(landmarks) : lower ? hasLowerBody(landmarks) : hasMinimalPose(landmarks),
         framing,       // { status, changed, speak, cutOff }
         armed,
         verdict,       // raw single-frame verdict (debug)

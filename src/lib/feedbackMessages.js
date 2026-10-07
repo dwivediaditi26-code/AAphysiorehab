@@ -312,4 +312,121 @@ export const FEEDBACK_MESSAGES = {
     voiceEn: "Hips up",
     voiceHi: "कूल्हे ऊपर",
   },
+
+  // --- Seated neck exercises: framing / setup (head and shoulders only) ---
+  moveBackUpperBody: {
+    en: "Your head and both shoulders need to be in frame — move your phone back a little",
+    hi: "आपका सिर और दोनों कंधे फ्रेम में दिखने चाहिए — फ़ोन को थोड़ा पीछे करें",
+    voiceEn: "Move back a little",
+    voiceHi: "थोड़ा पीछे हटें",
+  },
+  cameraSetupTipSeatedFrontal: {
+    en: "Sit tall facing the camera. Prop your phone at face height so your head and both shoulders are in frame.",
+    hi: "कैमरे की तरफ़ मुंह करके सीधे बैठें। फ़ोन को चेहरे की ऊंचाई पर रखें ताकि सिर और दोनों कंधे फ्रेम में दिखें।",
+    voiceEn: "Sit tall, face the camera",
+    voiceHi: "सीधे बैठें, कैमरे की तरफ़ देखें",
+  },
+  cameraSetupTipSeatedSide: {
+    en: "Sit tall, side-on to the camera. Prop your phone at head height so your head and shoulder are in frame.",
+    hi: "कैमरे की तरफ़ बग़ल में सीधे बैठें। फ़ोन को सिर की ऊंचाई पर रखें ताकि सिर और कंधा फ्रेम में दिखें।",
+    voiceEn: "Sit tall, side-on to the camera",
+    voiceHi: "सीधे बैठें, बग़ल में",
+  },
+
+  // --- Chin tuck (cervical retraction) ---
+  tuckFurther: {
+    en: "Draw your head a little further back",
+    hi: "सिर को थोड़ा और पीछे खींचें",
+    voiceEn: "Head back",
+    voiceHi: "सिर पीछे",
+  },
+  keepChinLevel: {
+    en: "Keep your chin level — slide your head straight back, don't nod",
+    hi: "ठुड्डी सीधी रखें — सिर को सीधा पीछे खिसकाएं, नीचे न झुकाएं",
+    voiceEn: "Chin level",
+    voiceHi: "ठुड्डी सीधी",
+  },
+  goodChinTuck: {
+    good: true,
+    en: "Good — head drawn straight back, chin level",
+    hi: "बढ़िया — सिर सीधा पीछे गया, ठुड्डी सीधी रही",
+    voiceEn: "Good",
+    voiceHi: "बढ़िया",
+  },
+
+  // --- Neck rotation (look right / look left) ---
+  turnFurther: {
+    en: "Turn a little further, until you feel a gentle stretch",
+    hi: "थोड़ा और घुमाएं, जब तक हल्का खिंचाव महसूस न हो",
+    voiceEn: "Turn a bit more",
+    voiceHi: "थोड़ा और घुमाएं",
+  },
+  keepShouldersSquare: {
+    en: "Keep your shoulders facing forward — turn only your neck",
+    hi: "कंधे सामने की तरफ़ रखें — सिर्फ़ गर्दन घुमाएं",
+    voiceEn: "Shoulders still",
+    voiceHi: "कंधे स्थिर",
+  },
+  goodNeckRotation: {
+    good: true,
+    en: "Smooth, easy turn — nicely done",
+    hi: "आराम से घुमाया — बहुत अच्छा",
+    voiceEn: "Good",
+    voiceHi: "बढ़िया",
+  },
+
+  // --- Neck side bend (ear toward shoulder) ---
+  bendFurther: {
+    en: "Bring your ear a little closer to your shoulder",
+    hi: "कान को कंधे की तरफ़ थोड़ा और झुकाएं",
+    voiceEn: "Ear to shoulder",
+    voiceHi: "कान कंधे की तरफ़",
+  },
+  shouldersLevel: {
+    en: "Keep both shoulders level — don't lift your shoulder up to your ear",
+    hi: "दोनों कंधे बराबर रखें — कंधे को कान की तरफ़ ऊपर न उठाएं",
+    voiceEn: "Shoulders level",
+    voiceHi: "कंधे बराबर",
+  },
+  goodNeckSideBend: {
+    good: true,
+    en: "Good side stretch, shoulders stayed level",
+    hi: "बढ़िया खिंचाव, कंधे बराबर रहे",
+    voiceEn: "Good",
+    voiceHi: "बढ़िया",
+  },
+
+  // --- Neck: shared ---
+  slowNeck: {
+    en: "Move your neck slowly and smoothly — no jerking",
+    hi: "गर्दन को धीरे-धीरे और आराम से घुमाएं — झटका न दें",
+    voiceEn: "Slowly",
+    voiceHi: "धीरे-धीरे",
+  },
+
+  // --- Shoulder raise: compensation cues (flexion + abduction) ---
+  dontShrug: {
+    en: "Keep your shoulder relaxed — don't shrug it up",
+    hi: "कंधे को ढीला रखें — ऊपर न उचकाएं",
+    voiceEn: "Relax shoulders",
+    voiceHi: "कंधे ढीले",
+  },
+  standTallNoLean: {
+    en: "Stand tall — don't lean your body to lift your arm",
+    hi: "सीधे खड़े रहें — हाथ उठाने के लिए शरीर को न झुकाएं",
+    voiceEn: "Stand tall",
+    voiceHi: "सीधे खड़े रहें",
+  },
+  elbowStraight: {
+    en: "Keep your elbow straight",
+    hi: "कोहनी को सीधा रखें",
+    voiceEn: "Elbow straight",
+    voiceHi: "कोहनी सीधी",
+  },
+  raiseArmHigher: {
+    en: "Raise your arm a little higher, up to shoulder height",
+    hi: "हाथ को थोड़ा और ऊपर उठाएं, कंधे की ऊंचाई तक",
+    voiceEn: "A bit higher",
+    voiceHi: "थोड़ा और ऊपर",
+  },
 };

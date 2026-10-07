@@ -4,7 +4,7 @@ import { parseRepsTarget } from "../../lib/helpers.js";
 import { createLiveSession } from "../../lib/liveSession.js";
 import { getLandmarker } from "../../lib/landmarker.js";
 import { FEEDBACK_MESSAGES as M } from "../../lib/feedbackMessages.js";
-import { TRACKER_CAMERA_ORIENTATION, TRACKER_FRAMING_REGION } from "../../lib/trackedExercises.js";
+import { TRACKER_CAMERA_ORIENTATION, TRACKER_FRAMING_REGION, cameraSetupTip } from "../../lib/trackedExercises.js";
 import { createVoiceCoach } from "../../lib/voiceCoach.js";
 import { numberWord } from "../../lib/numberWords.js";
 import AirPointerOverlay from "./AirPointerOverlay.jsx";
@@ -33,15 +33,17 @@ import AirPointerOverlay from "./AirPointerOverlay.jsx";
  */
 
 // Which message to show/speak for each stable framing problem (see poseQuality.js).
-// The 'lower' region (bridging) names what it actually needs: hips, knees and feet.
+// The 'lower' region (bridging) names what it actually needs: hips, knees and feet;
+// the 'upper' region (seated neck work) asks for head and shoulders only.
 const framingMessages = (region) => ({
   no_person: M.noPersonDetected,
-  cut_off: region === "lower" ? M.moveBackLowerBody : M.moveBackFullBody,
+  cut_off: region === "lower" ? M.moveBackLowerBody : region === "upper" ? M.moveBackUpperBody : M.moveBackFullBody,
   too_small: M.moveCloser,
   low_confidence: M.lowConfidence,
 });
 
 const CONNECTIONS = [
+  [7, 0], [0, 8], [7, 8], // head: ear line + nose, so neck tilt/turn is visible on screen
   [11, 12], [11, 23], [12, 24], [23, 24],
   [11, 13], [13, 15], [12, 14], [14, 16],
   [23, 25], [25, 27], [24, 26], [26, 28],
@@ -72,9 +74,7 @@ export default function TrackedExerciseSession({ ex, prescribed, trackerFactory,
   // render the effect started in — so it must read live values from refs, not state.
   const repsRef = useRef(0);
   const elapsedRef = useRef(0);
-  const setupTip = region === "lower"
-    ? M.cameraSetupTipLowerBody
-    : orientation === "side" ? M.cameraSetupTipSide : M.cameraSetupTipFrontal;
+  const setupTip = cameraSetupTip(ex.id);
 
   const [status, setStatus] = useState("loading"); // loading | ready | denied | error
   const [running, setRunning] = useState(true);

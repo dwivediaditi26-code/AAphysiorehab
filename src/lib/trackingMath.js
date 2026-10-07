@@ -90,6 +90,15 @@ export function hasMinimalPose(landmarks, threshold = 0.3) {
   );
 }
 
+// Head + shoulder: a seated neck exercise filmed close, where the hips and
+// everything below are out of shot on purpose. A head landmark (nose or either
+// ear) and at least one shoulder, nothing below the shoulders required.
+export function hasUpperBody(landmarks, threshold = 0.3) {
+  if (!landmarks) return false;
+  const seen = (i) => !!landmarks[i] && (landmarks[i].visibility ?? 1) >= threshold;
+  return [0, 7, 8].some(seen) && [11, 12].some(seen);
+}
+
 // Hip + knee on AT LEAST ONE side: the pelvis and a lower limb. The minimal
 // pose for exercises tracked from the pelvis down (bridging), where the head
 // and shoulders are routinely out of frame because the phone is close.
