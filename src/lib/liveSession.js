@@ -40,12 +40,14 @@ export function createLiveSession({ trackerFactory, orientation = "frontal", reg
     /** The underlying tracker (the screen reads getFeedback() from it when finishing). */
     tracker,
 
-    /** meta.aspect = videoWidth / videoHeight. */
+    /** meta.aspect = videoWidth / videoHeight. meta.holdStart = true keeps the
+     * "3, 2, 1" from beginning (the spoken guide is still talking); the setup
+     * is still watched and the tracker still calibrates meanwhile. */
     process(rawLandmarks, now = Date.now(), meta = {}) {
       const q = quality.process(rawLandmarks, now, meta);
       const events = [];
 
-      const cd = countdown.update(q.framing.status === "ok", now);
+      const cd = countdown.update(q.framing.status === "ok" && !meta.holdStart, now);
       if (cd.announce) events.push({ type: "countdown", announce: cd.announce, number: cd.number });
 
       if (q.trackable && q.armed) tracker.processFrame(q.landmarks, now, meta);

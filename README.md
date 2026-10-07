@@ -174,7 +174,9 @@ Camera tracking runs every landmark through `src/lib/poseQuality.js` and
   `package-lock.json`), GPU delegate with CPU fallback.
 
 `npm test` runs the synthetic tracker suite, `test-air-pointer.mjs`,
-`test-form-rules.mjs` (neck and shoulder form rules, synthetic geometry), and
+`test-form-rules.mjs` (neck and shoulder form rules, synthetic geometry),
+`test-guide.mjs` (the spoken guide and the speech sequencing, against a fake
+speech engine), and
 `test-bridge-reliability.mjs`, which replays **real** MediaPipe landmarks
 (`test-fixtures/`). Thresholds are a
 draft from one studio clip. Add your own patients' footage (correct AND
@@ -242,3 +244,38 @@ standard ranges and checked against synthetic geometry only. They have not been
 validated on real patient footage, and the head-yaw and side-bend numbers in
 particular rest on a single 2D camera. Treat them as a starting point to tune,
 not as clinical measurements.
+
+## What the app says to a first-time patient
+
+A patient on their own at home can't ask "how far do I put the phone?", so the
+app says it out loud, in Hindi or English, and shows the same words on screen
+(`guideScript.js`, played by `useSpokenBriefing.js`, shown by `GuideCard.jsx`).
+
+| When | What is said | Where it comes from |
+|---|---|---|
+| On the exercise page, before Start | Where to put the phone, how far, what must be in view, and how to stand/sit/lie, in both languages | `cameraSetupTip()` in `trackedExercises.js` |
+| When the camera is ready (first time for that exercise) | 1. the set-up above, read aloud; 2. "Today's exercise is Neck Rotation. You'll do it ten times, and we'll count together"; 3. the first two instruction steps; 4. "go slowly and stop if you feel sharp pain; when the camera can see you we'll count 3, 2, 1" | `buildBriefing()` |
+| Same exercise, later visits | Only 2 and 4 (a long speech on every visit would just be skipped). A Skip button is always on screen | `createGuideMemory()` |
+| The 3, 2, 1 | Waits until the guide has finished talking, then runs | `holdStart` in `liveSession.js` |
+| Each rep | The number, then either that rep's correction, or how many are left | `repCallout()` |
+| Last rep | "Well done, all done!", and the screen waits for it to finish before closing (the next screen cancels any speech in progress, which would otherwise cut it off) | `whenIdle()` in `voiceCoach.js` |
+| Hold exercises | The hold time and how many times; seconds counted aloud with "just five more seconds"; each completed hold | `holdTick()`, `holdDoneCallout()` |
+
+Typical set-up distances (general guidance; the framing check still corrects the
+real shot): seated neck work about an arm's length (2-3 feet) at face height;
+standing exercises 6-8 feet (2 m) at waist height; lying exercises 5-6 feet
+(1.5-2 m) with the phone on the floor beside the mat; bridging 4-5 feet.
+
+During a set a correction always beats encouragement, so "keep your chin
+level" is never buried under "you're doing well". Plain middle reps say only the
+number, so the voice does not talk over the movement.
+
+The voice language is remembered between exercises (a Hindi speaker no longer
+re-taps "हिं" every time) and starts in Hindi on a Hindi device. If speech is
+off or unsupported the guide is skipped and the written tip stays on screen;
+that does not count as the patient having heard it.
+
+Not verified: how any real phone's Hindi voice sounds (device voices vary, and
+some have none installed), and the guide has not been run against a live camera,
+only against a fake speech engine and synthetic frames. Have a Hindi speaker
+listen to it on a real phone, and tune the wording and distances.

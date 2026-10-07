@@ -112,11 +112,23 @@ export const TRACKER_CAMERA_ORIENTATION = {
   e31: "frontal",
 };
 
-/** The on-screen / spoken camera set-up instruction for an exercise. */
+// What the patient's body is doing, which decides how the phone should be
+// placed (a standing person and a person on a mat need different set-ups even
+// with the same camera orientation). Used for the set-up tip and the spoken guide.
+export const TRACKER_POSTURE = {
+  e3: "lying", e4: "lying", e5: "lying", e17: "lying", e19: "lying", e22: "lying", e27: "lying",
+  e6: "lying", e23: "lying", e20: "lying",
+  e9: "standing", e13: "standing", e14: "standing", e15: "standing", e16: "standing", e18: "standing",
+  e29: "seated", e30: "seated", e31: "seated",
+};
+
+/** The on-screen / spoken camera set-up instruction for an exercise, with the
+ * distance and what must be in view. */
 export function cameraSetupTip(exerciseId) {
   const orientation = TRACKER_CAMERA_ORIENTATION[exerciseId];
   const region = TRACKER_FRAMING_REGION[exerciseId];
   if (region === "upper") return orientation === "side" ? M.cameraSetupTipSeatedSide : M.cameraSetupTipSeatedFrontal;
   if (region === "lower") return M.cameraSetupTipLowerBody;
-  return orientation === "side" ? M.cameraSetupTipSide : M.cameraSetupTipFrontal;
+  if (orientation === "side") return TRACKER_POSTURE[exerciseId] === "standing" ? M.cameraSetupTipStandingSide : M.cameraSetupTipSide;
+  return M.cameraSetupTipFrontal;
 }

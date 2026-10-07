@@ -160,6 +160,11 @@ export const INSTRUCTIONS_MAP = {
     { en: "Keep knees aligned with toes", hi: "घुटनों को पंजों की सीध में रखें" },
     { en: "Sit back down with control", hi: "नियंत्रण से वापस बैठ जाएं" },
   ],
+  e16: [
+    { en: "Stand tall, holding a wall or chair lightly for balance", hi: "सीधे खड़े हों, संतुलन के लिए दीवार या कुर्सी को हल्के से पकड़ें" },
+    { en: "Rise up onto your toes as high as you comfortably can", hi: "पंजों पर ऊपर उठें, जितना आराम से उठ सकें" },
+    { en: "Lower your heels back down slowly with control", hi: "एड़ियों को धीरे-धीरे नियंत्रण से वापस नीचे लाएं" },
+  ],
   e17: [
     { en: "Lie on your back, one knee bent with foot flat", hi: "पीठ के बल लेटें, एक घुटना मोड़ें और पैर ज़मीन पर सपाट रखें" },
     { en: "Extend the other leg straight, lifted off the floor", hi: "दूसरे पैर को सीधा रखें और ज़मीन से ऊपर उठाएं" },
